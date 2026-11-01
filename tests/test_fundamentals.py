@@ -33,3 +33,14 @@ def test_share_class_is_not_silently_swapped(monkeypatch):
 
 def test_registry_and_schemas_agree():
     assert {s["function"]["name"] for s in TOOL_SCHEMAS} == set(TOOL_REGISTRY)
+
+
+def test_empty_cache_says_so_instead_of_returning_a_bare_header(monkeypatch):
+    # Final review: the search fallback fails loudly, this one failed silently.
+    def boom(t):
+        raise RuntimeError("Yahoo 404")
+
+    monkeypatch.setattr("cfa_agent.tools._yf_info", boom)
+    monkeypatch.setattr("cfa_agent.tools.load_cache", lambda: {"fundamentals": {}, "search": []})
+    out = get_fundamentals("GOOGL")
+    assert "make_snapshot" in out

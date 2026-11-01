@@ -27,7 +27,7 @@ def _segments(filename: str, names: list[str]) -> dict[str, str]:
     tree = ast.parse(source)
     found: dict[str, str] = {}
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             key = node.name
         elif isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
             key = node.targets[0].id
@@ -62,8 +62,9 @@ T = _segments(
 )
 A = _segments(
     "agent.py",
-    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_invoke", "run_agent"],
+    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_create", "_invoke", "run_agent"],
 )
+C = _segments("config.py", ["CredentialError"])
 
 CACHE = json.loads((PACKAGE / "cache" / "googl.json").read_text(encoding="utf-8"))
 
@@ -118,9 +119,12 @@ Run the cells in order. Your two jobs at the end: rewrite the prompt, and add a 
     ),
     # 3
     code(
-        '''
+        f'''
 import getpass
 import os
+
+
+{C["CredentialError"]}
 
 
 def get_credentials():
@@ -143,7 +147,7 @@ def get_credentials():
 
 
 BASE_URL, API_KEY, MODEL = get_credentials()
-print(f"Using model {MODEL}")
+print(f"Using model {{MODEL}}")
 '''
     ),
     # 4
@@ -219,6 +223,9 @@ class AgentResult:
     model_calls: int
     tool_calls: list
     stopped_early: bool
+
+
+{A["_create"]}
 
 
 {A["_invoke"]}

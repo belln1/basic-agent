@@ -159,6 +159,15 @@ def get_fundamentals(ticker: str) -> str:
     for field in FUNDAMENTAL_FIELDS:
         if info.get(field) is not None:
             lines.append(f"{field}: {info[field]}")
+    if len(lines) == 1:
+        # Yahoo failed and the snapshot was never generated. Say so rather than
+        # hand back a bare heading: a silent empty result makes stage 4 look like
+        # stage 1, and nobody in the room would know why.
+        lines.append(
+            "no data available -- the live lookup failed and no offline snapshot "
+            "has been generated. Run tools/make_snapshot.py, then "
+            "tools/build_notebook.py."
+        )
     return "\n".join(lines)
 
 

@@ -12,6 +12,8 @@ means adding a function to the registry, never editing this file.
 import json
 from dataclasses import dataclass
 
+from cfa_agent.config import CredentialError
+
 # The lecturer's prompt, word for word. Do not edit it: the exercise is for students
 # to rewrite it themselves and see what changes.
 SYSTEM_PROMPT = (
@@ -36,9 +38,26 @@ class AgentResult:
     stopped_early: bool
 
 
+def _create(client, **kwargs):
+    """Call the model, turning a rejected key into something a student can act on.
+
+    The provider raises a 401 as a long traceback naming headers and request ids.
+    A finance student reading that has no idea the fix is "re-paste the key", so
+    we translate it once, here, where every model call passes through.
+    """
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        status = getattr(exc, "status_code", None)
+        if status == 401 or "authentication" in type(exc).__name__.lower():
+            raise CredentialError.unauthorized() from exc
+        raise
+
+
 def ask_without_tools(client, model: str, company: str) -> str:
     """Stage 1: one call, no tools, no loop. Whatever comes back is all we get."""
-    response = client.chat.completions.create(
+    response = _create(
+        client,
         model=model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -86,7 +105,8 @@ def run_agent(
     called: list[str] = []
 
     for _ in range(max_rounds):
-        response = client.chat.completions.create(
+        response = _create(
+            client,
             model=model,
             messages=messages,
             tools=schemas or None,

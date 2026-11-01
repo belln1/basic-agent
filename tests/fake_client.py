@@ -18,6 +18,11 @@ def tool_call(name: str, arguments: dict):
     return ("tools", [(name, arguments)])
 
 
+def raises(exc: Exception):
+    """Script the provider rejecting the call."""
+    return ("raise", exc)
+
+
 class _FakeFunction:
     def __init__(self, name: str, arguments: str):
         self.name = name
@@ -81,6 +86,9 @@ class FakeClient:
         self.tools_seen.append(tools)
         kind, payload = self._responses[self._served]
         self._served += 1
+
+        if kind == "raise":
+            raise payload
 
         if kind == "content":
             return _FakeResponse(_FakeMessage(payload, None))

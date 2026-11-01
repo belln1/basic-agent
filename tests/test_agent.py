@@ -1,6 +1,8 @@
-from fake_client import FakeClient, content, tool_call
+import pytest
+from fake_client import FakeClient, content, raises, tool_call
 
-from cfa_agent.agent import SYSTEM_PROMPT, run_agent
+from cfa_agent.agent import SYSTEM_PROMPT, ask_without_tools, run_agent
+from cfa_agent.config import CredentialError
 from cfa_agent.tools import TOOL_REGISTRY, TOOL_SCHEMAS
 
 
@@ -61,3 +63,23 @@ def test_user_message_asks_for_figures():
     run_agent(client, "m", "Alphabet", [], {})
     user = client.messages_seen[0][1]["content"]
     assert "Alphabet" in user and "figures" in user.lower()
+
+
+def test_rejected_key_gives_a_readable_message_not_a_traceback():
+    # Final review: Review Focus #5 was tested but never wired into the call path.
+    class Unauthorized(Exception):
+        status_code = 401
+
+    client = FakeClient([raises(Unauthorized("401 Incorrect API key provided"))])
+    with pytest.raises(CredentialError) as excinfo:
+        run_agent(client, "m", "Alphabet", [], {})
+    assert "API key" in str(excinfo.value) and "Runtime" in str(excinfo.value)
+
+
+def test_rejected_key_is_readable_in_stage_one_too():
+    class Unauthorized(Exception):
+        status_code = 401
+
+    client = FakeClient([raises(Unauthorized("401 Incorrect API key provided"))])
+    with pytest.raises(CredentialError):
+        ask_without_tools(client, "m", "Alphabet")
