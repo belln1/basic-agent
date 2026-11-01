@@ -1,0 +1,17 @@
+{
+  "generated_at": "",
+  "ticker": "GOOGL",
+  "fundamentals": {},
+  "search": [
+    {
+      "title": "PLACEHOLDER - run tools/make_snapshot.py to fetch real GOOGL coverage",
+      "body": "This snapshot has not been generated yet. Until it is, the offline fallback returns this notice instead of real search results, so that nobody mistakes seeded text for genuine reporting on Alphabet.",
+      "href": "https://example.invalid/placeholder"
+    },
+    {
+      "title": "PLACEHOLDER - no cached news available",
+      "body": "Regenerate before the lecture: uv run python tools/make_snapshot.py",
+      "href": "https://example.invalid/placeholder"
+    }
+  ]
+}
