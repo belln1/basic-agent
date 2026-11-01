@@ -12,6 +12,16 @@ because writing one is the exercise.
 """
 
 import ast
+import json
+from pathlib import Path
+
+_CACHE_PATH = Path(__file__).parent / "cache" / "googl.json"
+
+
+def load_cache() -> dict:
+    """The offline snapshot of GOOGL data, used when a live source is unavailable."""
+    return json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
+
 
 # Arithmetic only. Anything outside this list is rejected rather than evaluated,
 # which is why this tool cannot be talked into running `__import__('os')`.
@@ -88,6 +98,34 @@ def calculator(expression: str) -> str:
         return f"Error: {exc}."
 
 
+def _ddgs_text(query: str, max_results: int) -> list[dict]:
+    """The live DuckDuckGo call. Separated out so tests can stand in for the network."""
+    from ddgs import DDGS
+
+    return list(DDGS().text(query, max_results=max_results))
+
+
+def _format_results(results: list[dict]) -> str:
+    lines = []
+    for i, r in enumerate(results, start=1):
+        lines.append(f"{i}. {r.get('title', '')}\n   {r.get('body', '')}\n   {r.get('href', '')}")
+    return "\n".join(lines)
+
+
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web and return the top results as text."""
+    try:
+        results = _ddgs_text(query, max_results)
+    except Exception:
+        results = []
+    if not results:
+        # DuckDuckGo throttles when a whole classroom searches at once. That is an
+        # expected outcome here, not an error: fall back to the cached snapshot and
+        # say nothing, so a throttled student gets the same lesson as everyone else.
+        results = load_cache()["search"][:max_results]
+    return _format_results(results)
+
+
 CALCULATOR_SCHEMA = {
     "type": "function",
     "function": {
@@ -107,6 +145,33 @@ CALCULATOR_SCHEMA = {
                 }
             },
             "required": ["expression"],
+        },
+    },
+}
+
+WEB_SEARCH_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": (
+            "Search the web and return the top results as text. Use this for current "
+            "news, recent events, and analyst commentary -- anything that happened "
+            "after your training data ends. Results are prose, not figures: use "
+            "get_fundamentals when you need numbers you can compute with."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "What to search for, e.g. 'Alphabet Q3 earnings analyst reaction'",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "How many results to return. Defaults to 5.",
+                },
+            },
+            "required": ["query"],
         },
     },
 }
