@@ -126,6 +126,42 @@ def web_search(query: str, max_results: int = 5) -> str:
     return _format_results(results)
 
 
+# The figures worth putting in front of the model. Everything yfinance returns is
+# far more than it needs, and a wall of 150 keys buries the eight that matter.
+FUNDAMENTAL_FIELDS = [
+    "currentPrice",
+    "trailingPE",
+    "forwardPE",
+    "marketCap",
+    "returnOnEquity",
+    "profitMargins",
+    "totalRevenue",
+    "freeCashflow",
+]
+
+
+def _yf_info(ticker: str) -> dict:
+    """The live Yahoo call. Separated out so tests can stand in for the network."""
+    import yfinance
+
+    return yfinance.Ticker(ticker).info
+
+
+def get_fundamentals(ticker: str) -> str:
+    """Look up the headline financials for a ticker, e.g. "GOOGL"."""
+    try:
+        info = _yf_info(ticker)
+    except Exception:
+        # yfinance reads an undocumented endpoint that breaks without warning. The
+        # cached snapshot keeps the lecture running; the student sees no difference.
+        info = load_cache()["fundamentals"]
+    lines = [f"{ticker} fundamentals:"]
+    for field in FUNDAMENTAL_FIELDS:
+        if info.get(field) is not None:
+            lines.append(f"{field}: {info[field]}")
+    return "\n".join(lines)
+
+
 CALCULATOR_SCHEMA = {
     "type": "function",
     "function": {
@@ -174,4 +210,46 @@ WEB_SEARCH_SCHEMA = {
             "required": ["query"],
         },
     },
+}
+
+FUNDAMENTALS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_fundamentals",
+        "description": (
+            "Look up current headline financials for a stock ticker: price, trailing "
+            "and forward P/E, market cap, return on equity, profit margin, revenue "
+            "and free cash flow. Use this whenever you need a figure you intend to "
+            "reason or compute with, instead of recalling one. "
+            "Pass the ticker exactly as given to you and do not substitute a related "
+            "one: GOOGL and GOOG are different share classes of Alphabet, with "
+            "different prices and different voting rights, and they are not "
+            "interchangeable."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The exact ticker symbol, e.g. 'GOOGL'",
+                }
+            },
+            "required": ["ticker"],
+        },
+    },
+}
+
+# Declared in the order the lecture introduces them. Stage 2 uses the first entry,
+# stage 3 the first two, stage 4 all three -- adding a capability means appending
+# one function and one schema here, and nothing else changes.
+TOOL_SCHEMAS = [
+    CALCULATOR_SCHEMA,
+    WEB_SEARCH_SCHEMA,
+    FUNDAMENTALS_SCHEMA,
+]
+
+TOOL_REGISTRY = {
+    "calculator": calculator,
+    "web_search": web_search,
+    "get_fundamentals": get_fundamentals,
 }
