@@ -14,6 +14,7 @@ either re-running this script or porting the change back into the module settles
 
 import ast
 import json
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +70,25 @@ C = _segments("config.py", ["CredentialError"])
 CACHE = json.loads((PACKAGE / "cache" / "googl.json").read_text(encoding="utf-8"))
 
 
+def _pinned_requirements(names: list[str]) -> str:
+    """Build the pip line from the versions uv resolved.
+
+    Colab installs from PyPI and knows nothing about uv.lock, so without explicit
+    pins a breaking release on any of these could land between building this
+    notebook and teaching from it. Reading the lock keeps the room on the same
+    versions the test suite ran against.
+    """
+    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    versions = {p["name"]: p["version"] for p in lock.get("package", [])}
+    missing = [n for n in names if n not in versions]
+    if missing:
+        raise SystemExit(f"uv.lock has no version for {missing} -- run `uv lock` first")
+    return " ".join(f"{name}=={versions[name]}" for name in names)
+
+
+PINS = _pinned_requirements(["openai", "yfinance", "ddgs"])
+
+
 def md(text: str) -> dict:
     return {"cell_type": "markdown", "metadata": {}, "source": text.strip().splitlines(True)}
 
@@ -112,9 +132,12 @@ Run the cells in order. Your two jobs at the end: rewrite the prompt, and add a 
     ),
     # 2
     code(
-        """
+        f"""
 # Colab starts empty every session, so install what we need.
-!pip install -q openai yfinance ddgs
+# The versions are pinned deliberately: these are the ones this notebook was
+# built and tested against, and yfinance in particular changes often enough
+# that an unpinned install could behave differently from one week to the next.
+!pip install -q {PINS}
 """
     ),
     # 3
