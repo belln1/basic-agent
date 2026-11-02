@@ -175,12 +175,15 @@ print(f"Using model {{MODEL}}")
     ),
     # 4
     code(
-        """
+        f'''
 from openai import OpenAI
 
 # One client, pointed at whichever provider BASE_URL names.
 client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
-"""
+
+
+{A["_create"]}
+'''
     ),
     # 5
     code(
@@ -246,9 +249,6 @@ class AgentResult:
     model_calls: int
     tool_calls: list
     stopped_early: bool
-
-
-{A["_create"]}
 
 
 {A["_invoke"]}
