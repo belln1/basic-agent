@@ -34,7 +34,8 @@ def notebook_source():
 
 def module_source():
     return "\n".join(
-        (PACKAGE / name).read_text(encoding="utf-8") for name in ("tools.py", "agent.py")
+        (PACKAGE / name).read_text(encoding="utf-8")
+        for name in ("config.py", "tools.py", "agent.py")
     )
 
 
@@ -59,9 +60,14 @@ def test_stage_markers_present():
 def test_inlined_functions_match_module():
     # AST equality, not text equality: formatting may differ, logic may not
     for name in [
+        "get_credentials",
+        "_from_colab",
+        "_load_dotenv",
+        "_lookup",
         "calculator",
         "web_search",
         "get_fundamentals",
+        "_create",
         "run_agent",
         "ask_without_tools",
     ]:

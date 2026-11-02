@@ -13,6 +13,7 @@ lecture to type.
 import getpass
 import importlib
 import os
+from pathlib import Path
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -40,13 +41,38 @@ def _from_colab(name: str) -> str | None:
     return value or None
 
 
+def _load_dotenv(path: str = ".env") -> None:
+    """Copy `KEY=value` lines from a .env file into the environment, if one exists.
+
+    Colab has no .env file, so this does nothing there -- it is what makes the same
+    notebook run locally, where a .env is the usual place to keep these. Values
+    already in the environment win, so an explicit export still overrides the file.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
 def _lookup(name: str) -> str | None:
-    """Colab secret first, then the environment."""
+    """Colab secret first, then the environment (which includes any .env file)."""
     return _from_colab(name) or os.getenv(name) or None
 
 
 def get_credentials() -> tuple[str, str, str]:
-    """Return (base_url, api_key, model), asking for the key only if nothing has it."""
+    """Return (base_url, api_key, model), asking for the key only if nothing has it.
+
+    Each value is looked for in the same order: a Colab secret, then the
+    environment (including a .env file if one is present), then the default
+    above. Only the API key has no default, so only the API key can prompt.
+    """
+    _load_dotenv()
     base_url = _lookup("BASE_URL") or DEFAULT_BASE_URL
     model = _lookup("MODEL") or DEFAULT_MODEL
     api_key = _lookup("OPENAI_API_KEY")

@@ -65,7 +65,18 @@ A = _segments(
     "agent.py",
     ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_create", "_invoke", "run_agent"],
 )
-C = _segments("config.py", ["CredentialError"])
+C = _segments(
+    "config.py",
+    [
+        "DEFAULT_BASE_URL",
+        "DEFAULT_MODEL",
+        "CredentialError",
+        "_from_colab",
+        "_load_dotenv",
+        "_lookup",
+        "get_credentials",
+    ],
+)
 
 CACHE = json.loads((PACKAGE / "cache" / "googl.json").read_text(encoding="utf-8"))
 
@@ -144,33 +155,31 @@ Run the cells in order. Your two jobs at the end: rewrite the prompt, and add a 
     code(
         f'''
 import getpass
+import importlib
 import os
+from pathlib import Path
+
+{C["DEFAULT_BASE_URL"]}
+{C["DEFAULT_MODEL"]}
 
 
 {C["CredentialError"]}
 
 
-def get_credentials():
-    """Find the API key: a Colab secret, an environment variable, or just ask."""
-    base_url = os.getenv("BASE_URL") or "https://api.openai.com/v1"
-    model = os.getenv("MODEL") or "gpt-4o-mini"
+{C["_from_colab"]}
 
-    api_key = None
-    try:
-        from google.colab import userdata
 
-        api_key = userdata.get("OPENAI_API_KEY")
-    except Exception:
-        pass
-    api_key = api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        api_key = getpass.getpass("Paste the API key for this session: ").strip()
+{C["_load_dotenv"]}
 
-    return base_url, api_key, model
+
+{C["_lookup"]}
+
+
+{C["get_credentials"]}
 
 
 BASE_URL, API_KEY, MODEL = get_credentials()
-print(f"Using model {{MODEL}}")
+print(f"Using model {{MODEL}} at {{BASE_URL}}")
 '''
     ),
     # 4
