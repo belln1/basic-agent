@@ -297,6 +297,8 @@ STAGE_2_REGISTRY = {"calculator": calculator}
 result = run_agent(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
 print(result.answer)
 print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
+if result.stopped_early:
+    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
 '''
     ),
     # 11
@@ -336,6 +338,8 @@ STAGE_3_REGISTRY = {"calculator": calculator, "web_search": web_search}
 result = run_agent(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
 print(result.answer)
 print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
+if result.stopped_early:
+    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
 '''
     ),
     # 13
@@ -374,6 +378,8 @@ STAGE_4_REGISTRY = {
 result = run_agent(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
 print(result.answer)
 print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
+if result.stopped_early:
+    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
 
 # Pick one figure out of that answer and trace it back: which tool produced it,
 # and does it match what you find yourself?
@@ -458,6 +464,8 @@ MY_REGISTRY = {**STAGE_4_REGISTRY, "my_tool": my_tool}
 result = run_agent(client, MODEL, COMPANY, MY_SCHEMAS, MY_REGISTRY)
 print(result.answer)
 print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
+if result.stopped_early:
+    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
 '''
     ),
 ]

@@ -103,3 +103,16 @@ def test_rate_limit_gives_a_readable_message():
     with pytest.raises(CredentialError) as excinfo:
         run_agent(client, "m", "Alphabet", [], {})
     assert "rate-limiting" in str(excinfo.value)
+
+
+def test_unreachable_base_url_gives_a_readable_message():
+    """A private or wrong BASE_URL is the most likely setup mistake after a bad key,
+    and it otherwise surfaces as an opaque httpx timeout traceback."""
+    class APIConnectionError(Exception):
+        pass
+
+    client = FakeClient([raises(APIConnectionError("Connection error."))])
+    with pytest.raises(CredentialError) as excinfo:
+        run_agent(client, "m", "Alphabet", [], {})
+    msg = str(excinfo.value)
+    assert "BASE_URL" in msg and "192.168" in msg

@@ -38,6 +38,11 @@ class AgentResult:
     stopped_early: bool
 
 
+def _base_url_of(client) -> str | None:
+    """Best-effort read of the client's configured base URL, for error messages."""
+    return str(getattr(client, "base_url", "") or "") or None
+
+
 def _create(client, **kwargs):
     """Call the model, turning a rejected key into something a student can act on.
 
@@ -55,6 +60,9 @@ def _create(client, **kwargs):
             raise CredentialError.unknown_model(kwargs.get("model")) from exc
         if status == 429:
             raise CredentialError.rate_limited() from exc
+        name = type(exc).__name__.lower()
+        if "connection" in name or "timeout" in name:
+            raise CredentialError.unreachable(kwargs.get("base_url") or _base_url_of(client)) from exc
         raise
 
 
@@ -98,7 +106,7 @@ def run_agent(
     company: str,
     schemas: list[dict],
     registry: dict,
-    max_rounds: int = 6,
+    max_rounds: int = 10,
 ) -> AgentResult:
     """Stages 2-4: call the model, run any tool it asks for, repeat until it answers."""
     messages = [
@@ -130,7 +138,9 @@ def run_agent(
             )
 
     # The model kept asking for tools and never settled. Stop rather than spend the
-    # shared key on a loop that is not converging.
+    # shared key on a loop that is not converging. The default of 10 comes from a
+    # live run where a search-happy model used 6 rounds on stage 3 alone and was
+    # cut off mid-answer.
     last = next(
         (m.content for m in reversed(messages) if getattr(m, "content", None)),
         None,

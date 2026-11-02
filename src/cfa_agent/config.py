@@ -39,6 +39,15 @@ class CredentialError(Exception):
         )
 
     @classmethod
+    def unreachable(cls, base_url: str | None = None) -> "CredentialError":
+        return cls(
+            f"Could not reach the model provider at {base_url!r}. Check the BASE_URL "
+            "secret. Note that an address on a private network -- anything like "
+            "192.168.x.x, 10.x.x.x or localhost -- is not reachable from Colab, "
+            "because this notebook runs on a Google server rather than on your machine."
+        )
+
+    @classmethod
     def rate_limited(cls) -> "CredentialError":
         return cls(
             "The provider is rate-limiting this key -- usually because everyone in "

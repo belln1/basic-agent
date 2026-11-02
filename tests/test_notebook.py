@@ -120,3 +120,10 @@ def test_company_names_the_ticker_the_model_must_use():
     company string that reaches the prompt."""
     src = notebook_source()
     assert 'COMPANY = "Alphabet Inc. Class A (GOOGL)"' in src
+
+
+def test_stage_cells_surface_the_round_limit():
+    """A capped run prints a truncated answer; without this the student has no idea
+    why. Observed live: a search-happy model used all its rounds on stage 3."""
+    src = notebook_source()
+    assert src.count("if result.stopped_early:") == 4
