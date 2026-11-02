@@ -30,6 +30,21 @@ class CredentialError(Exception):
             "secret, or use Runtime -> Restart session and run the cells again."
         )
 
+    @classmethod
+    def unknown_model(cls, model: str | None = None) -> "CredentialError":
+        return cls(
+            f"The provider does not recognise the model {model!r}. Model names get "
+            "retired: set a MODEL secret (key icon in the left sidebar) to one your "
+            "account has, then use Runtime -> Restart session."
+        )
+
+    @classmethod
+    def rate_limited(cls) -> "CredentialError":
+        return cls(
+            "The provider is rate-limiting this key -- usually because everyone in "
+            "the room is calling it at once. Wait a few seconds and run the cell again."
+        )
+
 
 def _from_colab(name: str) -> str | None:
     """Read a Colab secret, or None when not on Colab / not set / not granted."""

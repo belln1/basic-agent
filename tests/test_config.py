@@ -1,12 +1,25 @@
 import sys
 import types
 
+import pytest
+
 from cfa_agent.config import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     CredentialError,
     get_credentials,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cwd(monkeypatch, tmp_path):
+    """Run every credential test in an empty directory.
+
+    get_credentials() reads a .env from the working directory, so without this a
+    lecturer who keeps a real .env in the repo root sees the suite go red -- and
+    the pre-lecture checklist gates the snapshot refresh on a green suite.
+    """
+    monkeypatch.chdir(tmp_path)
 
 
 def test_reads_from_env(monkeypatch):
@@ -94,7 +107,8 @@ def test_defaults_apply_when_nothing_supplies_them(monkeypatch, tmp_path):
     assert base_url == DEFAULT_BASE_URL and model == DEFAULT_MODEL
 
 
-def test_prompts_when_nothing_set(monkeypatch):
+def test_prompts_when_nothing_set(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)  # a real .env in the cwd would otherwise answer for us
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("getpass.getpass", lambda *_: "sk-typed")
     assert get_credentials()[1] == "sk-typed"

@@ -1,6 +1,13 @@
 {
   "generated_at": "",
   "ticker": "GOOGL",
+  "company": "Alphabet",
+  "aliases": [
+    "GOOGL",
+    "GOOG",
+    "Alphabet",
+    "Google"
+  ],
   "fundamentals": {},
   "search": [
     {

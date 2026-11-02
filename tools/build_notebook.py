@@ -197,7 +197,7 @@ client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
     # 5
     code(
         f'''
-COMPANY = "Alphabet Inc. Class A"
+COMPANY = "Alphabet Inc. Class A (GOOGL)"
 TICKER = "GOOGL"
 
 {A["SYSTEM_PROMPT"]}

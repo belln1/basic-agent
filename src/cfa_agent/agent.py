@@ -51,6 +51,10 @@ def _create(client, **kwargs):
         status = getattr(exc, "status_code", None)
         if status == 401 or "authentication" in type(exc).__name__.lower():
             raise CredentialError.unauthorized() from exc
+        if status == 404:
+            raise CredentialError.unknown_model(kwargs.get("model")) from exc
+        if status == 429:
+            raise CredentialError.rate_limited() from exc
         raise
 
 

@@ -83,3 +83,23 @@ def test_rejected_key_is_readable_in_stage_one_too():
     client = FakeClient([raises(Unauthorized("401 Incorrect API key provided"))])
     with pytest.raises(CredentialError):
         ask_without_tools(client, "m", "Alphabet")
+
+
+def test_retired_model_gives_a_readable_message():
+    class NotFound(Exception):
+        status_code = 404
+
+    client = FakeClient([raises(NotFound("404 model not found"))])
+    with pytest.raises(CredentialError) as excinfo:
+        run_agent(client, "gpt-retired", "Alphabet", [], {})
+    assert "gpt-retired" in str(excinfo.value) and "MODEL" in str(excinfo.value)
+
+
+def test_rate_limit_gives_a_readable_message():
+    class TooMany(Exception):
+        status_code = 429
+
+    client = FakeClient([raises(TooMany("429 rate limit"))])
+    with pytest.raises(CredentialError) as excinfo:
+        run_agent(client, "m", "Alphabet", [], {})
+    assert "rate-limiting" in str(excinfo.value)

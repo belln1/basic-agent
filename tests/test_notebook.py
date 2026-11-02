@@ -94,3 +94,29 @@ def test_notebook_is_valid_python():
         if cell["cell_type"] != "code":
             continue
         ast.parse(_strip_magics("".join(cell["source"])))
+
+
+def test_notebook_matches_what_the_builder_would_write():
+    """The whole file, not a list of names.
+
+    This is the guard that catches the likeliest operator mistake in the pre-lecture
+    refresh: regenerating the snapshot and forgetting to rebuild the notebook, which
+    leaves students reading stale embedded data while every other test stays green.
+    It also subsumes drift in the definitions the name-based AST check never covered
+    (schemas, _evaluate, _invoke, the embedded CACHE).
+    """
+    import build_notebook
+
+    expected = json.dumps(build_notebook.NOTEBOOK, indent=1) + "\n"
+    assert NOTEBOOK.read_text(encoding="utf-8") == expected, (
+        "notebooks/cfa_agent_lecture.ipynb is out of sync with its source. "
+        "Run: uv run python tools/build_notebook.py"
+    )
+
+
+def test_company_names_the_ticker_the_model_must_use():
+    """FUNDAMENTALS_SCHEMA tells the model to pass the ticker 'exactly as given to
+    you' -- so the ticker has to actually be given to it. COMPANY is the only
+    company string that reaches the prompt."""
+    src = notebook_source()
+    assert 'COMPANY = "Alphabet Inc. Class A (GOOGL)"' in src

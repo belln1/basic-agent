@@ -94,6 +94,8 @@ def calculator(expression: str) -> str:
         return str(_evaluate(tree))
     except ZeroDivisionError:
         return "Error: cannot divide by zero."
+    except OverflowError:
+        return "Error: that result is too large to compute."
     except ValueError as exc:
         return f"Error: {exc}."
 
@@ -114,16 +116,35 @@ def _format_results(results: list[dict]) -> str:
 
 def web_search(query: str, max_results: int = 5) -> str:
     """Search the web and return the top results as text."""
+    max_results = max(1, min(int(max_results or 5), 10))
     try:
         results = _ddgs_text(query, max_results)
     except Exception:
         results = []
-    if not results:
-        # DuckDuckGo throttles when a whole classroom searches at once. That is an
-        # expected outcome here, not an error: fall back to the cached snapshot and
-        # say nothing, so a throttled student gets the same lesson as everyone else.
-        results = load_cache()["search"][:max_results]
-    return _format_results(results)
+    if results:
+        return _format_results(results)
+
+    # DuckDuckGo throttles when a whole classroom searches at once. That is an
+    # expected outcome here, not an error: fall back to the cached snapshot and
+    # say nothing, so a throttled student gets the same lesson as everyone else.
+    #
+    # But the snapshot is about ONE company. Serving its headlines for a query
+    # about some other company would be inventing news, so the fallback only
+    # applies when the query is actually about the company we cached.
+    cache = load_cache()
+    aliases = cache.get("aliases") or [cache.get("ticker", "")]
+    if not any(alias and alias.lower() in query.lower() for alias in aliases):
+        return (
+            f"Error: the live search failed and there is no offline snapshot for "
+            f"{query!r}. The cached snapshot only covers {cache.get('company') or cache.get('ticker')}."
+        )
+    cached = cache.get("search") or []
+    if not cached:
+        return (
+            "Error: the live search failed and the offline snapshot holds no results. "
+            "Ask whoever prepared this notebook to regenerate it."
+        )
+    return _format_results(cached[:max_results])
 
 
 # The figures worth putting in front of the model. Everything yfinance returns is
@@ -154,7 +175,19 @@ def get_fundamentals(ticker: str) -> str:
     except Exception:
         # yfinance reads an undocumented endpoint that breaks without warning. The
         # cached snapshot keeps the lecture running; the student sees no difference.
-        info = load_cache()["fundamentals"]
+        #
+        # The snapshot covers ONE ticker, though. Filling an AAPL heading with the
+        # cached GOOGL figures would attribute real numbers to the wrong security --
+        # and GOOG vs GOOGL is the very share-class trap this lecture teaches. So the
+        # fallback applies only when the ticker asked for is the one we cached.
+        cache = load_cache()
+        if ticker.strip().upper() != str(cache.get("ticker", "")).strip().upper():
+            return (
+                f"Error: the live lookup for {ticker} failed and there is no offline "
+                f"snapshot for it (the snapshot covers {cache.get('ticker')} only). "
+                f"Do not substitute figures from another ticker."
+            )
+        info = cache.get("fundamentals") or {}
     lines = [f"{ticker} fundamentals:"]
     for field in FUNDAMENTAL_FIELDS:
         if info.get(field) is not None:
@@ -164,9 +197,8 @@ def get_fundamentals(ticker: str) -> str:
         # hand back a bare heading: a silent empty result makes stage 4 look like
         # stage 1, and nobody in the room would know why.
         lines.append(
-            "no data available -- the live lookup failed and no offline snapshot "
-            "has been generated. Run tools/make_snapshot.py, then "
-            "tools/build_notebook.py."
+            "no data available -- the live lookup failed and the offline snapshot is "
+            "empty. Ask whoever prepared this notebook to regenerate it."
         )
     return "\n".join(lines)
 

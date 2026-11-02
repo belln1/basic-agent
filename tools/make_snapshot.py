@@ -17,6 +17,9 @@ from pathlib import Path
 from cfa_agent import tools
 
 TICKER = "GOOGL"
+COMPANY = "Alphabet"
+# Used to decide whether a cached result may answer a given query at all.
+ALIASES = ["GOOGL", "GOOG", "Alphabet", "Google"]
 
 # Enough coverage for the model to situate a recommendation, without being a corpus.
 QUERIES = [
@@ -46,9 +49,20 @@ def build_snapshot(path: Path) -> None:
                 }
             )
 
+    if not fundamentals or not search:
+        # A snapshot with an empty section is worse than none: it is the silent
+        # path that degrades stage 3 or 4 without anyone noticing on the day.
+        raise SystemExit(
+            f"refusing to write a partial snapshot: "
+            f"{len(fundamentals)} fundamentals, {len(search)} search results. "
+            f"Check the network and run again."
+        )
+
     snapshot = {
         "generated_at": date.today().isoformat(),
         "ticker": TICKER,
+        "company": COMPANY,
+        "aliases": ALIASES,
         "fundamentals": fundamentals,
         "search": search,
     }

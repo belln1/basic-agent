@@ -41,3 +41,9 @@ def test_rejects_huge_exponent_instead_of_hanging():
 
 def test_schema_matches_function_name():
     assert CALCULATOR_SCHEMA["function"]["name"] == "calculator"
+
+
+@pytest.mark.parametrize("expr", ["1e300 ** 2", "10 ** 400 / 2.0"])
+def test_overflow_returns_a_string_not_an_exception(expr):
+    """The docstring promises every path returns a string; students call this directly."""
+    assert calculator(expr).startswith("Error")
