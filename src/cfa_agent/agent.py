@@ -14,20 +14,38 @@ from dataclasses import dataclass, field
 
 from cfa_agent.config import CredentialError
 
-# The lecturer's prompt, word for word. Do not edit it: the exercise is for students
-# to rewrite it themselves and see what changes.
-SYSTEM_PROMPT = (
-    "You are a CFA expert and have to give a buy/hold/sell recommendation about a company."
-)
+# Slide 51's experiment prompt is SYSTEM_PROMPT plus _user_message, word for word. It
+# asks for nothing about sources or figures: stage 1 has to be free to go wrong.
+SYSTEM_PROMPT = "You are a stock analyst."
 
 
 def _user_message(company: str) -> str:
     """What we actually ask for. Kept apart from SYSTEM_PROMPT, which is fixed."""
-    return (
-        f"Give your buy/hold/sell recommendation for {company}. "
-        "Back it with specific, current figures rather than ones you recall, "
-        "and list the figures you relied on so they can be checked."
-    )
+    return f"Give a buy/hold/sell recommendation for {company} with a short justification."
+
+
+# Slide 21, word for word: the system prompt as a job description. The lab bonus swaps
+# it in for SYSTEM_PROMPT. It forbids the very recommendation the user message asks
+# for, which is the point of slide 55.
+BANK_SYSTEM_PROMPT = """ROLE
+You are a research assistant at a private bank. You prepare
+stock briefings for client advisors, not for clients.
+
+GOAL
+Answer the advisor's question in a one-page briefing.
+
+TOOLS
+Use web_search for news, get_stock_data for prices and
+dividends, calculator for every number you compute.
+
+RULES
+- Never calculate in your head. Always use the calculator.
+- Cite the source and date of every figure.
+- If data is missing or older than 7 days, say so.
+- Do not give a buy/sell recommendation.
+
+OUTPUT
+Summary (3 sentences) · Key figures (table) · Risks · Sources"""
 
 
 @dataclass
@@ -129,11 +147,12 @@ def run_agent(
     schemas: list[dict],
     registry: dict,
     max_rounds: int = 8,
+    question: str | None = None,
 ) -> AgentResult:
     """Stages 2-4: call the model, run any tool it asks for, repeat until it answers."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": _user_message(company)},
+        {"role": "user", "content": question or _user_message(company)},
     ]
     model_calls = 0
     total_tokens = 0
@@ -190,13 +209,21 @@ def run_agent(
     )
 
 
-def run_stage(client, model: str, company: str, schemas: list[dict], registry: dict, runs: int = 1):
+def run_stage(
+    client,
+    model: str,
+    company: str,
+    schemas: list[dict],
+    registry: dict,
+    runs: int = 1,
+    question: str | None = None,
+):
     """Run one stage `runs` times, each from a clean start, and print answer and trace."""
     results = []
     for number in range(1, runs + 1):
         if runs > 1:
             print(f"--- Run {number} of {runs} ---")
-        result = run_agent(client, model, company, schemas, registry)
+        result = run_agent(client, model, company, schemas, registry, question=question)
         print(result.answer)
         print("\nTool calls, in order:")
         print(format_trace(result) or "(none)")

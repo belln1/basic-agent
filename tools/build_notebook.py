@@ -69,6 +69,7 @@ A = _segments(
     [
         "SYSTEM_PROMPT",
         "_user_message",
+        "BANK_SYSTEM_PROMPT",
         "_base_url_of",
         "_create",
         "AgentResult",
@@ -152,7 +153,15 @@ still missing:
 | 3 | web search | current context, but as prose |
 | 4 | financial data | figures you can check |
 
-Run the cells in order. Your two jobs at the end: rewrite the prompt, and add a tool.
+Run the cells in order. At the end: a few bonus experiments, and one job of your own, which is to add a tool.
+"""
+    ),
+    md(
+        """
+## Section 0 · Setup
+
+Run the next three cells once: install the libraries, read your credentials, and create
+the client. If a cell stops with a message about the API key, the message says how to fix it.
 """
     ),
     # 2
@@ -227,10 +236,30 @@ COMPANY = "Roche Holding AG (ROG.SW)"
 TICKER = "ROG.SW"
 
 {A["SYSTEM_PROMPT"]}
+NAIVE_SYSTEM_PROMPT = SYSTEM_PROMPT  # to switch back after the bonus cells
 
 
 {A["_user_message"]}
+
+
+{A["BANK_SYSTEM_PROMPT"]}
 '''
+    ),
+    # 5c
+    md(
+        """
+## Section 1 · The loop and how to read its trace
+
+Every stage below prints the same three things after the answer:
+
+- **Tool calls, in order**: which function the model asked for, with which arguments.
+  `get_stock_data(ticker='ROG.SW')` is a different request from `get_stock_data(ticker='Roche')`.
+- **Model calls**: how many times the loop went round. Each one is a paid API call.
+- **Tokens**: the size of everything sent and received, added up over those calls.
+
+Judge the *trace*, not only the answer: a confident recommendation with no tool calls
+behind it is a recollection.
+"""
     ),
     # 5b
     code(
@@ -258,20 +287,24 @@ from dataclasses import dataclass, field
 {A["run_stage"]}
 '''
     ),
-    # 5c
     md(
         """
-## Reading the trace
+### What to write down
 
-Every stage below prints the same three things after the answer:
+For each stage, one row. In stage 1 run the cell three times and note all three recommendations.
 
-- **Tool calls, in order**: which function the model asked for, with which arguments.
-  `get_stock_data(ticker='ROG.SW')` is a different request from `get_stock_data(ticker='Roche')`.
-- **Model calls**: how many times the loop went round. Each one is a paid API call.
-- **Tokens**: the size of everything sent and received, added up over those calls.
+| Stage | Quoted price (as of) | Actual price | Figures with a source | Recommendation, run 1 / 2 / 3 | Consistent? | Tool calls | Tokens |
+|---|---|---|---|---|---|---|---|
+| 1 · only LLM | | | | | | | |
+| 2 · + calculator | | | | | | | |
+| 3 · + web search | | | | | | | |
+| 4 · + yfinance | | | | | | | |
 
-Judge the *trace*, not only the answer: a confident recommendation with no tool calls
-behind it is a recollection.
+Look at the trace, not only the answer: which tools, with which arguments, in which order?
+
+## Stage 1 · Only the LLM
+
+No tools. What can go wrong?
 """
     ),
     # 6
@@ -311,6 +344,13 @@ No amount of rewording the prompt fixes this. You cannot ask a model to know som
 was never told. It needs a way to go and look.
 """
     ),
+    md(
+        """
+## Stage 2 · + calculator
+
+Same prompt, same model, same loop. Only the tool list changes. Does the answer get better?
+"""
+    ),
     # 9
     code(
         f'''
@@ -341,6 +381,13 @@ STAGE_2_REGISTRY = {"calculator": calculator}
 
 run_stage(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
 '''
+    ),
+    md(
+        """
+## Stage 3 · + web search
+
+Current news. What changes, and what do you still not know about the numbers?
+"""
     ),
     # 11
     code(
@@ -378,6 +425,13 @@ STAGE_3_REGISTRY = {"calculator": calculator, "web_search": web_search}
 
 run_stage(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
 '''
+    ),
+    md(
+        """
+## Stage 4 · + yfinance
+
+Structured market data with a date. Is it good enough now?
+"""
     ),
     # 13
     code(
@@ -456,6 +510,38 @@ A few things we skipped, which matter in practice:
 - **Not advice.** None of this is investment advice, and a model with a data feed is
   still not a CFA.
 """
+    ),
+    md(
+        """
+## Bonus · if you finish early
+
+Each cell below changes one thing. Run it, then compare the trace with stage 4.
+"""
+    ),
+    code(
+        '''
+# Bonus 1: the bank-grade system prompt (slide 21). Same question, same tools.
+SYSTEM_PROMPT = BANK_SYSTEM_PROMPT
+run_stage(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
+'''
+    ),
+    code(
+        '''
+# Bonus 2: another Swiss share, with the plain prompt again. Only COMPANY changes.
+# The offline fallback only knows Roche, so this needs live Yahoo and search.
+SYSTEM_PROMPT = NAIVE_SYSTEM_PROMPT
+run_stage(client, MODEL, "Nestlé S.A. (NESN.SW)", STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
+'''
+    ),
+    code(
+        '''
+# Bonus 3: ask for something nobody should promise. Try it with both system prompts.
+SYSTEM_PROMPT = NAIVE_SYSTEM_PROMPT
+run_stage(
+    client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY,
+    question="Guarantee me a 10 % return on Roche.",
+)
+'''
     ),
     # 16
     code(
