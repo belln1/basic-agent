@@ -160,12 +160,10 @@ def run_agent(
     trace: list[dict] = []
 
     for _ in range(max_rounds):
-        response = _create(
-            client,
-            model=model,
-            messages=messages,
-            tools=schemas or None,
-        )
+        # Leave the key out entirely when there are no tools: some providers reject
+        # "tools": null.
+        extra = {"tools": schemas} if schemas else {}
+        response = _create(client, model=model, messages=messages, **extra)
         model_calls += 1
         total_tokens += getattr(getattr(response, "usage", None), "total_tokens", 0) or 0
         message = response.choices[0].message

@@ -13,6 +13,7 @@ because writing one is the exercise.
 
 import ast
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -134,7 +135,11 @@ def web_search(query: str, max_results: int = 5) -> str:
     # applies when the query is actually about the company we cached.
     cache = load_cache()
     aliases = cache.get("aliases") or [cache.get("ticker", "")]
-    if not any(alias and alias.lower() in query.lower() for alias in aliases):
+    # Whole words only: "ROG" must not match inside "programme".
+    if not any(
+        alias and re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", query, re.IGNORECASE)
+        for alias in aliases
+    ):
         return (
             f"Error: the live search failed and there is no offline snapshot for "
             f"{query!r}. The cached snapshot only covers {cache.get('company') or cache.get('ticker')}."

@@ -231,3 +231,24 @@ def test_run_stage_flags_a_capped_run(capsys):
     client = FakeClient([tool_call("calculator", {"expression": "1+1"})] * 20)
     run_stage(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
     assert "hit the round limit" in capsys.readouterr().out
+
+
+def test_no_tools_means_no_tools_key_in_the_request():
+    """Stage 1 once sent "tools": null; some providers reject that with a 400."""
+    seen = {}
+
+    class _Completions:
+        def create(self, **kwargs):
+            seen.update(kwargs)
+            return FakeClient([content("Hold.")])._next(
+                model=None, messages=kwargs["messages"], tools=None
+            )
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    run_agent(_Client(), "m", "Roche", [], {})
+    assert "tools" not in seen

@@ -392,6 +392,7 @@ Current news. What changes, and what do you still not know about the numbers?
     # 11
     code(
         f'''
+import re
 from ddgs import DDGS
 
 # The offline snapshot, embedded because Colab has no copy of the repository.
