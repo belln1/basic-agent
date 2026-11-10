@@ -14,7 +14,7 @@ sidebar. `BASE_URL` and `MODEL` are optional secrets that override the defaults
 
 ## The notebook is generated — do not hand-edit its code cells
 
-`notebooks/cfa_agent_lecture.ipynb` is a build artifact. Its code cells are lifted
+`notebooks/basic_agent.ipynb` is a build artifact. Its code cells are lifted
 verbatim out of `src/cfa_agent/` by `tools/build_notebook.py`, so what students run is
 exactly what the test suite covers.
 

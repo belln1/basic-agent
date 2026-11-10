@@ -6,7 +6,7 @@ from pathlib import Path
 from cfa_agent.agent import SYSTEM_PROMPT
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOK = ROOT / "notebooks" / "cfa_agent_lecture.ipynb"
+NOTEBOOK = ROOT / "notebooks" / "basic_agent.ipynb"
 PACKAGE = ROOT / "src" / "cfa_agent"
 
 
@@ -109,7 +109,7 @@ def test_notebook_matches_what_the_builder_would_write():
 
     expected = json.dumps(build_notebook.NOTEBOOK, indent=1) + "\n"
     assert NOTEBOOK.read_text(encoding="utf-8") == expected, (
-        "notebooks/cfa_agent_lecture.ipynb is out of sync with its source. "
+        "notebooks/basic_agent.ipynb is out of sync with its source. "
         "Run: uv run python tools/build_notebook.py"
     )
 

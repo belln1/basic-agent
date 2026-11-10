@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "cfa_agent"
-OUT = ROOT / "notebooks" / "cfa_agent_lecture.ipynb"
+OUT = ROOT / "notebooks" / "basic_agent.ipynb"
 
 
 def _segments(filename: str, names: list[str]) -> dict[str, str]:
@@ -63,7 +63,7 @@ T = _segments(
 )
 A = _segments(
     "agent.py",
-    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_create", "_invoke", "run_agent"],
+    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_base_url_of", "_create", "_invoke", "run_agent"],
 )
 C = _segments(
     "config.py",
@@ -189,6 +189,18 @@ from openai import OpenAI
 
 # One client, pointed at whichever provider BASE_URL names.
 client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
+
+
+# The slides show the naive version: catch everything, print a message. It hides the
+# real error from the loop. The version below translates the common failures instead.
+# def _create(client, **kwargs):
+#     try:
+#         return client.chat.completions.create(**kwargs)
+#     except Exception as exc:
+#         return f"unexpected error: {{exc}}"
+
+
+{A["_base_url_of"]}
 
 
 {A["_create"]}

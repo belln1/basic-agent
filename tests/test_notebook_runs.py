@@ -19,7 +19,7 @@ from pathlib import Path
 
 from fake_client import FakeClient, content, raises, tool_call
 
-NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "cfa_agent_lecture.ipynb"
+NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "basic_agent.ipynb"
 
 
 def _code_cells():
@@ -147,3 +147,19 @@ def test_added_tool_is_called_without_touching_run_agent(monkeypatch):
     assert result.tool_calls == ["dividend_yield"]
     assert result.answer == "Hold, on that yield."
     assert client.messages_seen[-1][-1]["content"] == "GOOGL dividend yield: 0.42%"
+
+
+def test_unreachable_base_url_is_readable_from_the_notebook(monkeypatch):
+    """A dropped helper (`_base_url_of`) once turned this into a NameError."""
+    ns = notebook_namespace(monkeypatch)
+
+    class APIConnectionError(Exception):
+        pass
+
+    client = FakeClient([raises(APIConnectionError("Connection error."))])
+    try:
+        ns["run_agent"](client, "test-model", "Roche", [], {})
+    except ns["CredentialError"] as exc:
+        assert "BASE_URL" in str(exc)
+    else:
+        raise AssertionError("an unreachable provider did not surface as CredentialError")
