@@ -119,7 +119,7 @@ def test_company_names_the_ticker_the_model_must_use():
     you' -- so the ticker has to actually be given to it. COMPANY is the only
     company string that reaches the prompt."""
     src = notebook_source()
-    assert 'COMPANY = "Alphabet Inc. Class A (GOOGL)"' in src
+    assert 'COMPANY = "Roche Holding AG (ROG.SW)"' in src
 
 
 def test_stage_cells_surface_the_round_limit():

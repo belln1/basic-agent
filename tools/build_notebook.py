@@ -78,7 +78,7 @@ C = _segments(
     ],
 )
 
-CACHE = json.loads((PACKAGE / "cache" / "googl.json").read_text(encoding="utf-8"))
+CACHE = json.loads((PACKAGE / "cache" / "roche.json").read_text(encoding="utf-8"))
 
 
 def _pinned_requirements(names: list[str]) -> str:
@@ -209,8 +209,8 @@ client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
     # 5
     code(
         f'''
-COMPANY = "Alphabet Inc. Class A (GOOGL)"
-TICKER = "GOOGL"
+COMPANY = "Roche Holding AG (ROG.SW)"
+TICKER = "ROG.SW"
 
 {A["SYSTEM_PROMPT"]}
 
@@ -243,12 +243,13 @@ The model is not lying. It is doing the only thing it can: recalling. Its traini
 stopped at some point in the past, and it has no way to know that, so it reports old
 figures in the present tense and sounds exactly as certain either way.
 
-Two things make this sharper for Alphabet specifically:
+Two things make this sharper for Roche specifically:
 
-- **The 2022 split.** Alphabet split 20-for-1. A model reaching for a pre-split price is
-  not a few percent out, it is out by a factor of twenty. Watch for a suspiciously large
-  share price.
-- **It reads well.** Alphabet is one of the most written-about companies on earth, so the
+- **Currency and share type.** Roche trades in Swiss francs (CHF), not dollars, and there
+  are two listed securities: the Genussschein (`ROG`) and the Inhaberaktie (`RO`), at
+  different prices. A model that quotes a price without saying which one, or in which
+  currency, has told you nothing you can check.
+- **It reads well.** Roche is one of the most written-about companies in Europe, so the
   *narrative* the model produces is genuinely competent. Only the figures are wrong. That
   combination -- sound reasoning over broken inputs -- is the dangerous one, and it is
   much harder to spot than obvious nonsense.
@@ -359,8 +360,8 @@ if result.stopped_early:
         f'''
 import yfinance
 
-# Share classes are not interchangeable: GOOGL (Class A, voting) and GOOG (Class C,
-# non-voting) trade at different prices. An agent that fetches whichever one it felt
+# Securities are not interchangeable: Roche's Genussschein (ROG.SW) and its Inhaberaktie
+# (RO.SW) trade at different prices. An agent that fetches whichever one it felt
 # like has given you an answer about a different security than the one you asked
 # about. The schema below tells the model so explicitly.
 

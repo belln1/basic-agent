@@ -17,13 +17,13 @@ def test_throttle_falls_back_to_cache(monkeypatch):
         raise RuntimeError("202 Ratelimit")
 
     monkeypatch.setattr("cfa_agent.tools._ddgs_text", boom)
-    out = web_search("GOOGL earnings")
+    out = web_search("Roche Q3 sales")
     assert out.strip() != "" and "Error" not in out
 
 
 def test_empty_results_fall_back_to_cache(monkeypatch):
     monkeypatch.setattr("cfa_agent.tools._ddgs_text", lambda q, n: [])
-    assert web_search("GOOGL earnings").strip() != ""
+    assert web_search("Roche Q3 sales").strip() != ""
 
 
 def test_cache_ships_with_search_results():

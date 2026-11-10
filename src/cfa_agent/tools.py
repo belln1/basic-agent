@@ -15,11 +15,11 @@ import ast
 import json
 from pathlib import Path
 
-_CACHE_PATH = Path(__file__).parent / "cache" / "googl.json"
+_CACHE_PATH = Path(__file__).parent / "cache" / "roche.json"
 
 
 def load_cache() -> dict:
-    """The offline snapshot of GOOGL data, used when a live source is unavailable."""
+    """The offline snapshot of Roche data, used when a live source is unavailable."""
     return json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
 
 
@@ -169,7 +169,7 @@ def _yf_info(ticker: str) -> dict:
 
 
 def get_fundamentals(ticker: str) -> str:
-    """Look up the headline financials for a ticker, e.g. "GOOGL"."""
+    """Look up the headline financials for a ticker, e.g. "ROG.SW"."""
     try:
         info = _yf_info(ticker)
     except Exception:
@@ -177,8 +177,8 @@ def get_fundamentals(ticker: str) -> str:
         # cached snapshot keeps the lecture running; the student sees no difference.
         #
         # The snapshot covers ONE ticker, though. Filling an AAPL heading with the
-        # cached GOOGL figures would attribute real numbers to the wrong security --
-        # and GOOG vs GOOGL is the very share-class trap this lecture teaches. So the
+        # cached Roche figures would attribute real numbers to the wrong security --
+        # and ROG.SW vs RO.SW is the very share-class trap this lecture teaches. So the
         # fallback applies only when the ticker asked for is the one we cached.
         cache = load_cache()
         if ticker.strip().upper() != str(cache.get("ticker", "")).strip().upper():
@@ -241,7 +241,7 @@ WEB_SEARCH_SCHEMA = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "What to search for, e.g. 'Alphabet Q3 earnings analyst reaction'",
+                    "description": "What to search for, e.g. 'Roche Q3 sales analyst reaction'",
                 },
                 "max_results": {
                     "type": "integer",
@@ -263,16 +263,16 @@ FUNDAMENTALS_SCHEMA = {
             "and free cash flow. Use this whenever you need a figure you intend to "
             "reason or compute with, instead of recalling one. "
             "Pass the ticker exactly as given to you and do not substitute a related "
-            "one: GOOGL and GOOG are different share classes of Alphabet, with "
-            "different prices and different voting rights, and they are not "
-            "interchangeable."
+            "one: ROG.SW (Roche Genussschein) and RO.SW (Roche Inhaberaktie) are "
+            "different securities of the same company, with different prices, and "
+            "they are not interchangeable."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "ticker": {
                     "type": "string",
-                    "description": "The exact ticker symbol, e.g. 'GOOGL'",
+                    "description": "The exact ticker symbol, e.g. 'ROG.SW'",
                 }
             },
             "required": ["ticker"],

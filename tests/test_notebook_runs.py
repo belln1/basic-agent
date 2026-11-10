@@ -85,7 +85,7 @@ def test_search_fallback_holds_when_duckduckgo_fails(monkeypatch):
         raise RuntimeError("202 Ratelimit")
 
     ns["_ddgs_text"] = boom
-    out = ns["web_search"]("GOOGL earnings")
+    out = ns["web_search"]("Roche Q3 sales")
     assert out.strip() != "" and not out.startswith("Error")
 
 
@@ -97,8 +97,8 @@ def test_fundamentals_fallback_holds_when_yahoo_fails(monkeypatch):
         raise RuntimeError("Yahoo 404")
 
     ns["_yf_info"] = boom
-    out = ns["get_fundamentals"]("GOOGL")
-    assert "GOOGL" in out and not out.startswith("Error")
+    out = ns["get_fundamentals"]("ROG.SW")
+    assert "ROG.SW" in out and not out.startswith("Error")
 
 
 def test_rejected_key_is_readable_from_the_notebook(monkeypatch):
