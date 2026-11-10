@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "cfa_agent"
-OUT = ROOT / "notebooks" / "cfa_agent_lecture.ipynb"
+OUT = ROOT / "notebooks" / "basic_agent.ipynb"
 
 
 def _segments(filename: str, names: list[str]) -> dict[str, str]:
@@ -55,15 +55,30 @@ T = _segments(
         "_format_results",
         "web_search",
         "WEB_SEARCH_SCHEMA",
-        "FUNDAMENTAL_FIELDS",
+        "STOCK_FIELDS",
         "_yf_info",
-        "get_fundamentals",
-        "FUNDAMENTALS_SCHEMA",
+        "_yf_history",
+        "_history_stats",
+        "_live_quote",
+        "get_stock_data",
+        "STOCK_DATA_SCHEMA",
     ],
 )
 A = _segments(
     "agent.py",
-    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_create", "_invoke", "run_agent"],
+    [
+        "SYSTEM_PROMPT",
+        "_user_message",
+        "BANK_SYSTEM_PROMPT",
+        "_base_url_of",
+        "_create",
+        "AgentResult",
+        "_arguments_of",
+        "_invoke",
+        "run_agent",
+        "format_trace",
+        "run_stage",
+    ],
 )
 C = _segments(
     "config.py",
@@ -78,7 +93,7 @@ C = _segments(
     ],
 )
 
-CACHE = json.loads((PACKAGE / "cache" / "googl.json").read_text(encoding="utf-8"))
+CACHE = json.loads((PACKAGE / "cache" / "roche.json").read_text(encoding="utf-8"))
 
 
 def _pinned_requirements(names: list[str]) -> str:
@@ -138,7 +153,15 @@ still missing:
 | 3 | web search | current context, but as prose |
 | 4 | financial data | figures you can check |
 
-Run the cells in order. Your two jobs at the end: rewrite the prompt, and add a tool.
+Run the cells in order. At the end: a few bonus experiments, and one job of your own, which is to add a tool.
+"""
+    ),
+    md(
+        """
+## Section 0 · Setup
+
+Run the next three cells once: install the libraries, read your credentials, and create
+the client. If a cell stops with a message about the API key, the message says how to fix it.
 """
     ),
     # 2
@@ -191,29 +214,104 @@ from openai import OpenAI
 client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
 
 
+# The slides show the naive version: catch everything, print a message. It hides the
+# real error from the loop. The version below translates the common failures instead.
+# def _create(client, **kwargs):
+#     try:
+#         return client.chat.completions.create(**kwargs)
+#     except Exception as exc:
+#         return f"unexpected error: {{exc}}"
+
+
+{A["_base_url_of"]}
+
+
 {A["_create"]}
 '''
     ),
     # 5
     code(
         f'''
-COMPANY = "Alphabet Inc. Class A (GOOGL)"
-TICKER = "GOOGL"
+COMPANY = "Roche Holding AG (ROG.SW)"
+TICKER = "ROG.SW"
 
 {A["SYSTEM_PROMPT"]}
+NAIVE_SYSTEM_PROMPT = SYSTEM_PROMPT  # to switch back after the bonus cells
 
 
 {A["_user_message"]}
+
+
+{A["BANK_SYSTEM_PROMPT"]}
 '''
+    ),
+    # 5c
+    md(
+        """
+## Section 1 · The loop and how to read its trace
+
+Every stage below prints the same three things after the answer:
+
+- **Tool calls, in order**: which function the model asked for, with which arguments.
+  `get_stock_data(ticker='ROG.SW')` is a different request from `get_stock_data(ticker='Roche')`.
+- **Model calls**: how many times the loop went round. Each one is a paid API call.
+- **Tokens**: the size of everything sent and received, added up over those calls.
+
+Judge the *trace*, not only the answer: a confident recommendation with no tool calls
+behind it is a recollection.
+"""
+    ),
+    # 5b
+    code(
+        f'''
+import json
+from dataclasses import dataclass, field
+
+
+@dataclass
+{A["AgentResult"]}
+
+
+{A["_arguments_of"]}
+
+
+{A["_invoke"]}
+
+
+{A["run_agent"]}
+
+
+{A["format_trace"]}
+
+
+{A["run_stage"]}
+'''
+    ),
+    md(
+        """
+### What to write down
+
+For each stage, one row. In stage 1 run the cell three times and note all three recommendations.
+
+| Stage | Quoted price (as of) | Actual price | Figures with a source | Recommendation, run 1 / 2 / 3 | Consistent? | Tool calls | Tokens |
+|---|---|---|---|---|---|---|---|
+| 1 · only LLM | | | | | | | |
+| 2 · + calculator | | | | | | | |
+| 3 · + web search | | | | | | | |
+| 4 · + yfinance | | | | | | | |
+
+Look at the trace, not only the answer: which tools, with which arguments, in which order?
+
+## Stage 1 · Only the LLM
+
+No tools. What can go wrong?
+"""
     ),
     # 6
     code(
-        f'''
-# Stage 1: the model alone. One call, no tools, no loop.
-{A["ask_without_tools"]}
-
-
-print(ask_without_tools(client, MODEL, COMPANY))
+        '''
+# Stage 1: the model alone. Same loop, empty tool list. Run three times: the answers differ.
+run_stage(client, MODEL, COMPANY, [], {}, runs=3)
 '''
     ),
     # 7
@@ -231,12 +329,13 @@ The model is not lying. It is doing the only thing it can: recalling. Its traini
 stopped at some point in the past, and it has no way to know that, so it reports old
 figures in the present tense and sounds exactly as certain either way.
 
-Two things make this sharper for Alphabet specifically:
+Two things make this sharper for Roche specifically:
 
-- **The 2022 split.** Alphabet split 20-for-1. A model reaching for a pre-split price is
-  not a few percent out, it is out by a factor of twenty. Watch for a suspiciously large
-  share price.
-- **It reads well.** Alphabet is one of the most written-about companies on earth, so the
+- **Currency and share type.** Roche trades in Swiss francs (CHF), not dollars, and there
+  are two listed securities: the Genussschein (`ROG`) and the Inhaberaktie (`RO`), at
+  different prices. A model that quotes a price without saying which one, or in which
+  currency, has told you nothing you can check.
+- **It reads well.** Roche is one of the most written-about companies in Europe, so the
   *narrative* the model produces is genuinely competent. Only the figures are wrong. That
   combination -- sound reasoning over broken inputs -- is the dangerous one, and it is
   much harder to spot than obvious nonsense.
@@ -245,26 +344,12 @@ No amount of rewording the prompt fixes this. You cannot ask a model to know som
 was never told. It needs a way to go and look.
 """
     ),
-    # 8
-    code(
-        f'''
-import json
-from dataclasses import dataclass
+    md(
+        """
+## Stage 2 · + calculator
 
-
-@dataclass
-class AgentResult:
-    answer: str
-    model_calls: int
-    tool_calls: list
-    stopped_early: bool
-
-
-{A["_invoke"]}
-
-
-{A["run_agent"]}
-'''
+Same prompt, same model, same loop. Only the tool list changes. Does the answer get better?
+"""
     ),
     # 9
     code(
@@ -294,16 +379,20 @@ import ast
 STAGE_2_SCHEMAS = [CALCULATOR_SCHEMA]
 STAGE_2_REGISTRY = {"calculator": calculator}
 
-result = run_agent(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
 '''
+    ),
+    md(
+        """
+## Stage 3 · + web search
+
+Current news. What changes, and what do you still not know about the numbers?
+"""
     ),
     # 11
     code(
         f'''
+import re
 from ddgs import DDGS
 
 # The offline snapshot, embedded because Colab has no copy of the repository.
@@ -335,51 +424,60 @@ def load_cache():
 STAGE_3_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA]
 STAGE_3_REGISTRY = {"calculator": calculator, "web_search": web_search}
 
-result = run_agent(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
 '''
+    ),
+    md(
+        """
+## Stage 4 · + yfinance
+
+Structured market data with a date. Is it good enough now?
+"""
     ),
     # 13
     code(
         f'''
 import yfinance
+from datetime import date
 
-# Share classes are not interchangeable: GOOGL (Class A, voting) and GOOG (Class C,
-# non-voting) trade at different prices. An agent that fetches whichever one it felt
+# Securities are not interchangeable: Roche's Genussschein (ROG.SW) and its Inhaberaktie
+# (RO.SW) trade at different prices. An agent that fetches whichever one it felt
 # like has given you an answer about a different security than the one you asked
 # about. The schema below tells the model so explicitly.
 
-{T["FUNDAMENTAL_FIELDS"]}
+{T["STOCK_FIELDS"]}
 
 
 {T["_yf_info"]}
 
 
-{T["get_fundamentals"]}
+{T["_yf_history"]}
 
 
-{T["FUNDAMENTALS_SCHEMA"]}
+{T["_history_stats"]}
+
+
+{T["_live_quote"]}
+
+
+{T["get_stock_data"]}
+
+
+{T["STOCK_DATA_SCHEMA"]}
 '''
     ),
     # 14
     code(
         '''
 # Stage 4: real financial data. Same loop, one more function.
-STAGE_4_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA, FUNDAMENTALS_SCHEMA]
+STAGE_4_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA, STOCK_DATA_SCHEMA]
 STAGE_4_REGISTRY = {
     "calculator": calculator,
     "web_search": web_search,
-    "get_fundamentals": get_fundamentals,
+    "get_stock_data": get_stock_data,
 }
 
-result = run_agent(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
 
 # Pick one figure out of that answer and trace it back: which tool produced it,
 # and does it match what you find yourself?
@@ -397,7 +495,7 @@ never the problem -- the model can multiply. The problem was that it was multipl
 numbers it had invented. A calculator applied to a made-up price gives you a precisely
 wrong answer, which is worse than an obviously wrong one, because it looks like work.
 
-The calculator only became worth having at stage 4, once `get_fundamentals` started
+The calculator only became worth having at stage 4, once `get_stock_data` started
 feeding it figures that were actually true. **A tool is only as good as what feeds it.**
 
 That is the thing worth taking out of today. When someone shows you an agent, the
@@ -413,6 +511,38 @@ A few things we skipped, which matter in practice:
 - **Not advice.** None of this is investment advice, and a model with a data feed is
   still not a CFA.
 """
+    ),
+    md(
+        """
+## Bonus · if you finish early
+
+Each cell below changes one thing. Run it, then compare the trace with stage 4.
+"""
+    ),
+    code(
+        '''
+# Bonus 1: the bank-grade system prompt (slide 21). Same question, same tools.
+SYSTEM_PROMPT = BANK_SYSTEM_PROMPT
+run_stage(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
+'''
+    ),
+    code(
+        '''
+# Bonus 2: another Swiss share, with the plain prompt again. Only COMPANY changes.
+# The offline fallback only knows Roche, so this needs live Yahoo and search.
+SYSTEM_PROMPT = NAIVE_SYSTEM_PROMPT
+run_stage(client, MODEL, "Nestlé S.A. (NESN.SW)", STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
+'''
+    ),
+    code(
+        '''
+# Bonus 3: ask for something nobody should promise. Try it with both system prompts.
+SYSTEM_PROMPT = NAIVE_SYSTEM_PROMPT
+run_stage(
+    client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY,
+    question="Guarantee me a 10 % return on Roche.",
+)
+'''
     ),
     # 16
     code(
@@ -461,11 +591,7 @@ MY_TOOL_SCHEMA = {
 MY_SCHEMAS = STAGE_4_SCHEMAS + [MY_TOOL_SCHEMA]
 MY_REGISTRY = {**STAGE_4_REGISTRY, "my_tool": my_tool}
 
-result = run_agent(client, MODEL, COMPANY, MY_SCHEMAS, MY_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, MY_SCHEMAS, MY_REGISTRY)
 '''
     ),
 ]

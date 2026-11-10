@@ -8,14 +8,14 @@ loop actually sent back to the model.
 import json
 
 
-def content(text: str):
+def content(text: str, tokens: int = 0):
     """Script a plain text response, with no tool calls."""
-    return ("content", text)
+    return ("content", text, tokens)
 
 
-def tool_call(name: str, arguments: dict):
+def tool_call(name: str, arguments: dict, tokens: int = 0):
     """Script a response in which the model asks for one tool."""
-    return ("tools", [(name, arguments)])
+    return ("tools", [(name, arguments)], tokens)
 
 
 def raises(exc: Exception):
@@ -48,9 +48,15 @@ class _FakeChoice:
         self.message = message
 
 
+class _FakeUsage:
+    def __init__(self, total_tokens: int):
+        self.total_tokens = total_tokens
+
+
 class _FakeResponse:
-    def __init__(self, message: _FakeMessage):
+    def __init__(self, message: _FakeMessage, tokens: int = 0):
         self.choices = [_FakeChoice(message)]
+        self.usage = _FakeUsage(tokens)
 
 
 class _Completions:
@@ -84,18 +90,19 @@ class FakeClient:
         # Snapshot, not alias: the loop keeps mutating the same list.
         self.messages_seen.append(list(messages))
         self.tools_seen.append(tools)
-        kind, payload = self._responses[self._served]
+        kind, payload, *rest = self._responses[self._served]
+        tokens = rest[0] if rest else 0
         self._served += 1
 
         if kind == "raise":
             raise payload
 
         if kind == "content":
-            return _FakeResponse(_FakeMessage(payload, None))
+            return _FakeResponse(_FakeMessage(payload, None), tokens)
 
         calls = []
         for name, arguments in payload:
             call_id = f"call_{len(self.issued_ids)}"
             self.issued_ids.append(call_id)
             calls.append(_FakeToolCall(call_id, name, arguments))
-        return _FakeResponse(_FakeMessage(None, calls))
+        return _FakeResponse(_FakeMessage(None, calls), tokens)

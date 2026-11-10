@@ -1,4 +1,4 @@
-"""Regenerate the offline GOOGL snapshot.
+"""Regenerate the offline Roche snapshot.
 
 Run this shortly before the lecture:
 
@@ -16,27 +16,24 @@ from pathlib import Path
 
 from cfa_agent import tools
 
-TICKER = "GOOGL"
-COMPANY = "Alphabet"
+TICKER = "ROG.SW"
+COMPANY = "Roche"
 # Used to decide whether a cached result may answer a given query at all.
-ALIASES = ["GOOGL", "GOOG", "Alphabet", "Google"]
+ALIASES = ["ROG.SW", "ROG", "Roche"]
 
 # Enough coverage for the model to situate a recommendation, without being a corpus.
 QUERIES = [
-    f"{TICKER} Alphabet latest quarterly earnings results",
-    f"{TICKER} Alphabet analyst price target buy or sell",
-    f"{TICKER} Alphabet recent news",
+    "Roche Holding latest quarterly sales results",
+    "Roche Holding analyst price target buy or sell",
+    "Roche Holding recent news",
 ]
 
-CACHE_PATH = Path(__file__).resolve().parents[1] / "src" / "cfa_agent" / "cache" / "googl.json"
+CACHE_PATH = Path(__file__).resolve().parents[1] / "src" / "cfa_agent" / "cache" / "roche.json"
 
 
 def build_snapshot(path: Path) -> None:
-    """Fetch live data for GOOGL and write it to `path` in the cache's shape."""
-    info = tools._yf_info(TICKER)
-    fundamentals = {
-        field: info[field] for field in tools.FUNDAMENTAL_FIELDS if info.get(field) is not None
-    }
+    """Fetch live data for Roche and write it to `path` in the cache's shape."""
+    fundamentals = tools._live_quote(TICKER)
 
     search: list[dict] = []
     for query in QUERIES:

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from fake_client import FakeClient, content, raises, tool_call
 
-NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "cfa_agent_lecture.ipynb"
+NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "basic_agent.ipynb"
 
 
 def _code_cells():
@@ -68,10 +68,11 @@ def test_expected_names_are_defined(monkeypatch):
         "get_credentials",
         "_create",
         "run_agent",
-        "ask_without_tools",
+        "run_stage",
+        "format_trace",
         "calculator",
         "web_search",
-        "get_fundamentals",
+        "get_stock_data",
         "SYSTEM_PROMPT",
     ]:
         assert name in ns, f"{name} is never defined in the notebook"
@@ -85,7 +86,7 @@ def test_search_fallback_holds_when_duckduckgo_fails(monkeypatch):
         raise RuntimeError("202 Ratelimit")
 
     ns["_ddgs_text"] = boom
-    out = ns["web_search"]("GOOGL earnings")
+    out = ns["web_search"]("Roche Q3 sales")
     assert out.strip() != "" and not out.startswith("Error")
 
 
@@ -97,8 +98,8 @@ def test_fundamentals_fallback_holds_when_yahoo_fails(monkeypatch):
         raise RuntimeError("Yahoo 404")
 
     ns["_yf_info"] = boom
-    out = ns["get_fundamentals"]("GOOGL")
-    assert "GOOGL" in out and not out.startswith("Error")
+    out = ns["get_stock_data"]("ROG.SW")
+    assert "ROG.SW" in out and not out.startswith("Error")
 
 
 def test_rejected_key_is_readable_from_the_notebook(monkeypatch):
@@ -147,3 +148,19 @@ def test_added_tool_is_called_without_touching_run_agent(monkeypatch):
     assert result.tool_calls == ["dividend_yield"]
     assert result.answer == "Hold, on that yield."
     assert client.messages_seen[-1][-1]["content"] == "GOOGL dividend yield: 0.42%"
+
+
+def test_unreachable_base_url_is_readable_from_the_notebook(monkeypatch):
+    """A dropped helper (`_base_url_of`) once turned this into a NameError."""
+    ns = notebook_namespace(monkeypatch)
+
+    class APIConnectionError(Exception):
+        pass
+
+    client = FakeClient([raises(APIConnectionError("Connection error."))])
+    try:
+        ns["run_agent"](client, "test-model", "Roche", [], {})
+    except ns["CredentialError"] as exc:
+        assert "BASE_URL" in str(exc)
+    else:
+        raise AssertionError("an unreachable provider did not surface as CredentialError")

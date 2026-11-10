@@ -13,13 +13,15 @@ because writing one is the exercise.
 
 import ast
 import json
+import re
+from datetime import date
 from pathlib import Path
 
-_CACHE_PATH = Path(__file__).parent / "cache" / "googl.json"
+_CACHE_PATH = Path(__file__).parent / "cache" / "roche.json"
 
 
 def load_cache() -> dict:
-    """The offline snapshot of GOOGL data, used when a live source is unavailable."""
+    """The offline snapshot of Roche data, used when a live source is unavailable."""
     return json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
 
 
@@ -133,7 +135,11 @@ def web_search(query: str, max_results: int = 5) -> str:
     # applies when the query is actually about the company we cached.
     cache = load_cache()
     aliases = cache.get("aliases") or [cache.get("ticker", "")]
-    if not any(alias and alias.lower() in query.lower() for alias in aliases):
+    # Whole words only: "ROG" must not match inside "programme".
+    if not any(
+        alias and re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", query, re.IGNORECASE)
+        for alias in aliases
+    ):
         return (
             f"Error: the live search failed and there is no offline snapshot for "
             f"{query!r}. The cached snapshot only covers {cache.get('company') or cache.get('ticker')}."
@@ -148,16 +154,13 @@ def web_search(query: str, max_results: int = 5) -> str:
 
 
 # The figures worth putting in front of the model. Everything yfinance returns is
-# far more than it needs, and a wall of 150 keys buries the eight that matter.
-FUNDAMENTAL_FIELDS = [
+# far more than it needs, and a wall of 150 keys buries the few that matter.
+STOCK_FIELDS = [
+    "currency",
     "currentPrice",
     "trailingPE",
     "forwardPE",
     "marketCap",
-    "returnOnEquity",
-    "profitMargins",
-    "totalRevenue",
-    "freeCashflow",
 ]
 
 
@@ -168,30 +171,70 @@ def _yf_info(ticker: str) -> dict:
     return yfinance.Ticker(ticker).info
 
 
-def get_fundamentals(ticker: str) -> str:
-    """Look up the headline financials for a ticker, e.g. "GOOGL"."""
+def _yf_history(ticker: str) -> list[float]:
+    """One year of daily closing prices, oldest first. Separate for the same reason."""
+    import yfinance
+
+    return [float(c) for c in yfinance.Ticker(ticker).history(period="1y")["Close"].tolist()]
+
+
+def _history_stats(closes: list[float]) -> dict:
+    """1-year return and annualised volatility, computed here rather than by the model."""
+    if len(closes) < 3 or closes[0] <= 0:
+        return {}
+    daily = [b / a - 1 for a, b in zip(closes, closes[1:])]
+    mean = sum(daily) / len(daily)
+    variance = sum((r - mean) ** 2 for r in daily) / (len(daily) - 1)
+    return {
+        "oneYearReturnPct": round((closes[-1] / closes[0] - 1) * 100, 2),
+        "annualisedVolatilityPct": round(variance**0.5 * 252**0.5 * 100, 2),
+    }
+
+
+def _live_quote(ticker: str) -> dict:
+    """Fetch the figures for one ticker. Raises if Yahoo has no price for it."""
+    info = _yf_info(ticker)
+    price = info.get("currentPrice")
+    if price is None:
+        raise ValueError(f"no price found for {ticker!r}")
+    quote = {f: info[f] for f in STOCK_FIELDS if info.get(f) is not None}
+    # Yahoo reports dividendYield as a fraction in some versions and a percentage in
+    # others. The annual dividend per share divided by the price has no such ambiguity.
+    if info.get("dividendRate") is not None and price:
+        quote["dividendYieldPct"] = round(info["dividendRate"] / price * 100, 2)
     try:
-        info = _yf_info(ticker)
+        quote.update(_history_stats(_yf_history(ticker)))
+    except Exception:
+        pass  # a quote without history is still worth returning
+    return quote
+
+
+def get_stock_data(ticker: str) -> str:
+    """Look up price, P/E, dividend yield, 1-year return and volatility, e.g. "ROG.SW"."""
+    try:
+        quote = _live_quote(ticker)
+        as_of = date.today().isoformat()
     except Exception:
         # yfinance reads an undocumented endpoint that breaks without warning. The
         # cached snapshot keeps the lecture running; the student sees no difference.
         #
-        # The snapshot covers ONE ticker, though. Filling an AAPL heading with the
-        # cached GOOGL figures would attribute real numbers to the wrong security --
-        # and GOOG vs GOOGL is the very share-class trap this lecture teaches. So the
+        # The snapshot covers ONE ticker, though. Filling an NESN.SW heading with the
+        # cached Roche figures would attribute real numbers to the wrong security --
+        # and ROG.SW vs RO.SW is the very share-class trap this lecture teaches. So the
         # fallback applies only when the ticker asked for is the one we cached.
         cache = load_cache()
         if ticker.strip().upper() != str(cache.get("ticker", "")).strip().upper():
             return (
-                f"Error: the live lookup for {ticker} failed and there is no offline "
+                f"Error: the live lookup for {ticker!r} failed and there is no offline "
                 f"snapshot for it (the snapshot covers {cache.get('ticker')} only). "
+                f"Check the ticker includes its exchange, e.g. 'ROG.SW'. "
                 f"Do not substitute figures from another ticker."
             )
-        info = cache.get("fundamentals") or {}
-    lines = [f"{ticker} fundamentals:"]
-    for field in FUNDAMENTAL_FIELDS:
-        if info.get(field) is not None:
-            lines.append(f"{field}: {info[field]}")
+        quote = cache.get("fundamentals") or {}
+        as_of = cache.get("generated_at") or "unknown"
+    lines = [f"{ticker} stock data (as of {as_of}):"]
+    for field, value in quote.items():
+        lines.append(f"{field}: {value}")
     if len(lines) == 1:
         # Yahoo failed and the snapshot was never generated. Say so rather than
         # hand back a bare heading: a silent empty result makes stage 4 look like
@@ -234,14 +277,14 @@ WEB_SEARCH_SCHEMA = {
             "Search the web and return the top results as text. Use this for current "
             "news, recent events, and analyst commentary -- anything that happened "
             "after your training data ends. Results are prose, not figures: use "
-            "get_fundamentals when you need numbers you can compute with."
+            "get_stock_data when you need numbers you can compute with."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "What to search for, e.g. 'Alphabet Q3 earnings analyst reaction'",
+                    "description": "What to search for, e.g. 'Roche Q3 sales analyst reaction'",
                 },
                 "max_results": {
                     "type": "integer",
@@ -253,26 +296,25 @@ WEB_SEARCH_SCHEMA = {
     },
 }
 
-FUNDAMENTALS_SCHEMA = {
+STOCK_DATA_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "get_fundamentals",
+        "name": "get_stock_data",
         "description": (
-            "Look up current headline financials for a stock ticker: price, trailing "
-            "and forward P/E, market cap, return on equity, profit margin, revenue "
-            "and free cash flow. Use this whenever you need a figure you intend to "
-            "reason or compute with, instead of recalling one. "
-            "Pass the ticker exactly as given to you and do not substitute a related "
-            "one: GOOGL and GOOG are different share classes of Alphabet, with "
-            "different prices and different voting rights, and they are not "
-            "interchangeable."
+            "Current price, P/E, dividend yield and 1-year return for a stock ticker. "
+            "Use for any market figure. Also returns annualised volatility, the "
+            "currency and the date of the data. Pass the ticker exactly as given "
+            "to you and do not substitute a related one: ROG.SW (Roche "
+            "Genussschein) and RO.SW (Roche Inhaberaktie) are different securities "
+            "with different prices."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "ticker": {
                     "type": "string",
-                    "description": "The exact ticker symbol, e.g. 'GOOGL'",
+                    "description": "Stock symbol, optional with exchange",
+                    "examples": ["ROG.SW", "AAPL"],
                 }
             },
             "required": ["ticker"],
@@ -286,11 +328,11 @@ FUNDAMENTALS_SCHEMA = {
 TOOL_SCHEMAS = [
     CALCULATOR_SCHEMA,
     WEB_SEARCH_SCHEMA,
-    FUNDAMENTALS_SCHEMA,
+    STOCK_DATA_SCHEMA,
 ]
 
 TOOL_REGISTRY = {
     "calculator": calculator,
     "web_search": web_search,
-    "get_fundamentals": get_fundamentals,
+    "get_stock_data": get_stock_data,
 }

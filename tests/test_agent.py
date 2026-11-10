@@ -1,7 +1,13 @@
 import pytest
 from fake_client import FakeClient, content, raises, tool_call
 
-from cfa_agent.agent import SYSTEM_PROMPT, ask_without_tools, run_agent
+from cfa_agent.agent import (
+    BANK_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    _user_message,
+    ask_without_tools,
+    run_agent,
+)
 from cfa_agent.config import CredentialError
 from cfa_agent.tools import TOOL_REGISTRY, TOOL_SCHEMAS
 
@@ -53,16 +59,35 @@ def test_iteration_cap_stops_and_flags():
 
 
 def test_system_prompt_is_verbatim():
-    assert SYSTEM_PROMPT == (
-        "You are a CFA expert and have to give a buy/hold/sell recommendation about a company."
+    assert SYSTEM_PROMPT == "You are a stock analyst."
+
+
+def test_experiment_prompt_is_slide_51_verbatim():
+    company = "Roche Holding AG (ROG.SW)"
+    assert f"{SYSTEM_PROMPT} {_user_message(company)}" == (
+        "You are a stock analyst. Give a buy/hold/sell recommendation for "
+        "Roche Holding AG (ROG.SW) with a short justification."
     )
 
 
-def test_user_message_asks_for_figures():
-    client = FakeClient([content("Hold.")])
-    run_agent(client, "m", "Alphabet", [], {})
-    user = client.messages_seen[0][1]["content"]
-    assert "Alphabet" in user and "figures" in user.lower()
+def test_user_message_does_not_hint_at_figures_or_sources():
+    """Stage 1 must be able to fail: the prompt may not ask for sourcing."""
+    assert "figure" not in _user_message("Roche").lower()
+
+
+def test_bank_prompt_is_slide_21_verbatim():
+    lines = BANK_SYSTEM_PROMPT.splitlines()
+    assert lines[0] == "ROLE"
+    assert "- Do not give a buy/sell recommendation." in lines
+    assert "- Cite the source and date of every figure." in lines
+    assert lines[-1] == "Summary (3 sentences) · Key figures (table) · Risks · Sources"
+    assert "get_stock_data for prices and" in BANK_SYSTEM_PROMPT
+
+
+def test_question_overrides_the_user_message():
+    client = FakeClient([content("No.")])
+    run_agent(client, "m", "Roche", [], {}, question="Guarantee me a 10 % return.")
+    assert client.messages_seen[0][1]["content"] == "Guarantee me a 10 % return."
 
 
 def test_rejected_key_gives_a_readable_message_not_a_traceback():
@@ -116,3 +141,114 @@ def test_unreachable_base_url_gives_a_readable_message():
         run_agent(client, "m", "Alphabet", [], {})
     msg = str(excinfo.value)
     assert "BASE_URL" in msg and "192.168" in msg
+
+
+# --- the trace (slides 52-53: tool calls with arguments, in order, plus tokens) ---
+
+
+def test_trace_records_tool_name_arguments_and_order():
+    from cfa_agent.agent import format_trace
+
+    client = FakeClient(
+        [
+            tool_call("calculator", {"expression": "2+2"}),
+            tool_call("calculator", {"expression": "3*3"}),
+            content("Buy."),
+        ]
+    )
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert [(t["round"], t["tool"], t["arguments"]) for t in r.trace] == [
+        (1, "calculator", {"expression": "2+2"}),
+        (2, "calculator", {"expression": "3*3"}),
+    ]
+    assert r.trace[0]["result"] == "4"
+    assert format_trace(r).splitlines() == [
+        "1. calculator(expression='2+2')",
+        "2. calculator(expression='3*3')",
+    ]
+
+
+def test_trace_with_malformed_arguments_is_printed_not_raised():
+    from cfa_agent.agent import format_trace
+
+    client = FakeClient([content("x")])
+    r = run_agent(client, "m", "Roche", [], {})
+    r.trace.append({"round": 1, "tool": "calculator", "arguments": "{not json", "result": "Error"})
+    assert "calculator({not json)" in format_trace(r)
+
+
+def test_malformed_arguments_reach_the_trace_as_raw_text():
+    import types
+
+    from fake_client import _FakeFunction, _FakeMessage, _FakeResponse
+
+    bad = types.SimpleNamespace(
+        id="call_x", type="function", function=_FakeFunction("calculator", "{not json")
+    )
+    client = FakeClient([content("unused")])
+    client._responses = [("raw", None)]
+
+    def _next(**_):
+        if client._served == 0:
+            client._served += 1
+            return _FakeResponse(_FakeMessage(None, [bad]))
+        return _FakeResponse(_FakeMessage("done", None))
+
+    client._next = _next
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.trace[0]["arguments"] == "{not json"
+    assert r.trace[0]["result"].startswith("Error")
+
+
+def test_total_tokens_are_summed_over_every_model_call():
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"}, tokens=100), content("Hold.", tokens=40)])
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.total_tokens == 140
+
+
+def test_default_round_limit_is_eight():
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"})] * 20)
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.stopped_early and r.model_calls == 8
+
+
+def test_run_stage_runs_independently_and_prints_each_trace(capsys):
+    from cfa_agent.agent import run_stage
+
+    client = FakeClient([content("Hold A.", tokens=10), content("Hold B.", tokens=20), content("Sell C.", tokens=30)])
+    results = run_stage(client, "m", "Roche", [], {}, runs=3)
+    out = capsys.readouterr().out
+    assert [r.answer for r in results] == ["Hold A.", "Hold B.", "Sell C."]
+    assert out.count("--- Run") == 3 and "3 runs" not in out
+    assert "1 model calls, 20 tokens" in out
+    # independent histories: each run started from system+user only
+    assert all(len(seen) == 2 for seen in client.messages_seen)
+
+
+def test_run_stage_flags_a_capped_run(capsys):
+    from cfa_agent.agent import run_stage
+
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"})] * 20)
+    run_stage(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert "hit the round limit" in capsys.readouterr().out
+
+
+def test_no_tools_means_no_tools_key_in_the_request():
+    """Stage 1 once sent "tools": null; some providers reject that with a 400."""
+    seen = {}
+
+    class _Completions:
+        def create(self, **kwargs):
+            seen.update(kwargs)
+            return FakeClient([content("Hold.")])._next(
+                model=None, messages=kwargs["messages"], tools=None
+            )
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    run_agent(_Client(), "m", "Roche", [], {})
+    assert "tools" not in seen
