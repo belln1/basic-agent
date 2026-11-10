@@ -55,10 +55,13 @@ T = _segments(
         "_format_results",
         "web_search",
         "WEB_SEARCH_SCHEMA",
-        "FUNDAMENTAL_FIELDS",
+        "STOCK_FIELDS",
         "_yf_info",
-        "get_fundamentals",
-        "FUNDAMENTALS_SCHEMA",
+        "_yf_history",
+        "_history_stats",
+        "_live_quote",
+        "get_stock_data",
+        "STOCK_DATA_SCHEMA",
     ],
 )
 A = _segments(
@@ -359,33 +362,43 @@ if result.stopped_early:
     code(
         f'''
 import yfinance
+from datetime import date
 
 # Securities are not interchangeable: Roche's Genussschein (ROG.SW) and its Inhaberaktie
 # (RO.SW) trade at different prices. An agent that fetches whichever one it felt
 # like has given you an answer about a different security than the one you asked
 # about. The schema below tells the model so explicitly.
 
-{T["FUNDAMENTAL_FIELDS"]}
+{T["STOCK_FIELDS"]}
 
 
 {T["_yf_info"]}
 
 
-{T["get_fundamentals"]}
+{T["_yf_history"]}
 
 
-{T["FUNDAMENTALS_SCHEMA"]}
+{T["_history_stats"]}
+
+
+{T["_live_quote"]}
+
+
+{T["get_stock_data"]}
+
+
+{T["STOCK_DATA_SCHEMA"]}
 '''
     ),
     # 14
     code(
         '''
 # Stage 4: real financial data. Same loop, one more function.
-STAGE_4_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA, FUNDAMENTALS_SCHEMA]
+STAGE_4_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA, STOCK_DATA_SCHEMA]
 STAGE_4_REGISTRY = {
     "calculator": calculator,
     "web_search": web_search,
-    "get_fundamentals": get_fundamentals,
+    "get_stock_data": get_stock_data,
 }
 
 result = run_agent(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
@@ -410,7 +423,7 @@ never the problem -- the model can multiply. The problem was that it was multipl
 numbers it had invented. A calculator applied to a made-up price gives you a precisely
 wrong answer, which is worse than an obviously wrong one, because it looks like work.
 
-The calculator only became worth having at stage 4, once `get_fundamentals` started
+The calculator only became worth having at stage 4, once `get_stock_data` started
 feeding it figures that were actually true. **A tool is only as good as what feeds it.**
 
 That is the thing worth taking out of today. When someone shows you an agent, the

@@ -71,7 +71,7 @@ def test_expected_names_are_defined(monkeypatch):
         "ask_without_tools",
         "calculator",
         "web_search",
-        "get_fundamentals",
+        "get_stock_data",
         "SYSTEM_PROMPT",
     ]:
         assert name in ns, f"{name} is never defined in the notebook"
@@ -97,7 +97,7 @@ def test_fundamentals_fallback_holds_when_yahoo_fails(monkeypatch):
         raise RuntimeError("Yahoo 404")
 
     ns["_yf_info"] = boom
-    out = ns["get_fundamentals"]("ROG.SW")
+    out = ns["get_stock_data"]("ROG.SW")
     assert "ROG.SW" in out and not out.startswith("Error")
 
 

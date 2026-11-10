@@ -33,10 +33,7 @@ CACHE_PATH = Path(__file__).resolve().parents[1] / "src" / "cfa_agent" / "cache"
 
 def build_snapshot(path: Path) -> None:
     """Fetch live data for Roche and write it to `path` in the cache's shape."""
-    info = tools._yf_info(TICKER)
-    fundamentals = {
-        field: info[field] for field in tools.FUNDAMENTAL_FIELDS if info.get(field) is not None
-    }
+    fundamentals = tools._live_quote(TICKER)
 
     search: list[dict] = []
     for query in QUERIES:

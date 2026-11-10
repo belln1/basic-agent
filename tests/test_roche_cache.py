@@ -14,7 +14,7 @@ def test_other_swiss_ticker_does_not_get_roche_figures(monkeypatch):
         raise RuntimeError("Yahoo down")
 
     monkeypatch.setattr(tools, "_yf_info", boom)
-    out = tools.get_fundamentals("NESN.SW")
+    out = tools.get_stock_data("NESN.SW")
     assert out.startswith("Error") and "ROG.SW" in out
 
 

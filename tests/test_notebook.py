@@ -66,7 +66,7 @@ def test_inlined_functions_match_module():
         "_lookup",
         "calculator",
         "web_search",
-        "get_fundamentals",
+        "get_stock_data",
         "_create",
         "run_agent",
         "ask_without_tools",
