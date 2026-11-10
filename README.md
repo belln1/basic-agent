@@ -5,7 +5,8 @@ notebook that builds a tool-using LLM agent in four stages, where each stage fai
 way that motivates the next.
 
 **Open in Colab:**
-[notebooks/cfa_agent_lecture.ipynb](https://colab.research.google.com/github/belln1/basic-agent/blob/main/notebooks/cfa_agent_lecture.ipynb)
+[notebooks/basic_agent.ipynb](https://colab.research.google.com/github/belln1/basic-agent/blob/main/notebooks/basic_agent.ipynb)
+
 
 Students need one secret, `OPENAI_API_KEY`, added via the key icon in Colab's left
 sidebar. `BASE_URL` and `MODEL` are optional secrets that override the defaults
