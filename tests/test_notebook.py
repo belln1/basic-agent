@@ -46,9 +46,9 @@ def ast_of(name, source):
     raise AssertionError(f"{name} is not defined in this source")
 
 
-def test_has_all_sixteen_cells_in_order():
+def test_starts_with_markdown_and_has_the_expected_cell_count():
     kinds = [c["cell_type"] for c in notebook()["cells"]]
-    assert kinds[0] == "markdown" and len(kinds) == 16
+    assert kinds[0] == "markdown" and len(kinds) == 17
 
 
 def test_stage_markers_present():
@@ -69,7 +69,8 @@ def test_inlined_functions_match_module():
         "get_stock_data",
         "_create",
         "run_agent",
-        "ask_without_tools",
+        "format_trace",
+        "run_stage",
     ]:
         assert ast_of(name, notebook_source()) == ast_of(name, module_source())
 
@@ -124,6 +125,14 @@ def test_company_names_the_ticker_the_model_must_use():
 
 def test_stage_cells_surface_the_round_limit():
     """A capped run prints a truncated answer; without this the student has no idea
-    why. Observed live: a search-happy model used all its rounds on stage 3."""
+    why. Observed live: a search-happy model used all its rounds on stage 3. The
+    note lives in run_stage, so every stage cell must go through it."""
     src = notebook_source()
-    assert src.count("if result.stopped_early:") == 4
+    assert src.count("if result.stopped_early:") == 1
+    assert "hit the round limit" in ast_of("run_stage", src) or "hit the round limit" in src
+    assert src.count("run_stage(client, MODEL, COMPANY,") == 5  # stages 1-4 and the exercise
+
+
+def test_stage_one_runs_three_times_with_no_tools():
+    """Slide 52: stage 1 is run three times to show the recommendation can change."""
+    assert "run_stage(client, MODEL, COMPANY, [], {}, runs=3)" in notebook_source()

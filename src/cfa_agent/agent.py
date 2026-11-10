@@ -10,7 +10,7 @@ means adding a function to the registry, never editing this file.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cfa_agent.config import CredentialError
 
@@ -36,6 +36,9 @@ class AgentResult:
     model_calls: int
     tool_calls: list[str]
     stopped_early: bool
+    # One entry per tool call: {"round", "tool", "arguments", "result"}.
+    trace: list[dict] = field(default_factory=list)
+    total_tokens: int = 0
 
 
 def _base_url_of(client) -> str | None:
@@ -100,13 +103,32 @@ def _invoke(call, registry: dict) -> str:
         return f"Error: {exc}"
 
 
+def _arguments_of(call):
+    """The arguments the model sent, as a dict -- or the raw text if it is not JSON."""
+    raw = call.function.arguments or "{}"
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def format_trace(result: AgentResult) -> str:
+    """One line per tool call, in order: `1. get_stock_data(ticker='ROG.SW')`."""
+    lines = []
+    for number, step in enumerate(result.trace, start=1):
+        args = step["arguments"]
+        shown = ", ".join(f"{k}={v!r}" for k, v in args.items()) if isinstance(args, dict) else args
+        lines.append(f"{number}. {step['tool']}({shown})")
+    return "\n".join(lines)
+
+
 def run_agent(
     client,
     model: str,
     company: str,
     schemas: list[dict],
     registry: dict,
-    max_rounds: int = 10,
+    max_rounds: int = 8,
 ) -> AgentResult:
     """Stages 2-4: call the model, run any tool it asks for, repeat until it answers."""
     messages = [
@@ -114,7 +136,9 @@ def run_agent(
         {"role": "user", "content": _user_message(company)},
     ]
     model_calls = 0
+    total_tokens = 0
     called: list[str] = []
+    trace: list[dict] = []
 
     for _ in range(max_rounds):
         response = _create(
@@ -124,22 +148,33 @@ def run_agent(
             tools=schemas or None,
         )
         model_calls += 1
+        total_tokens += getattr(getattr(response, "usage", None), "total_tokens", 0) or 0
         message = response.choices[0].message
         messages.append(message)
 
         if not message.tool_calls:
-            return AgentResult(message.content, model_calls, called, stopped_early=False)
+            return AgentResult(
+                message.content, model_calls, called, False, trace, total_tokens
+            )
 
         for call in message.tool_calls:
             called.append(call.function.name)
             result = _invoke(call, registry)
+            trace.append(
+                {
+                    "round": model_calls,
+                    "tool": call.function.name,
+                    "arguments": _arguments_of(call),
+                    "result": result,
+                }
+            )
             messages.append(
                 {"role": "tool", "tool_call_id": call.id, "content": result}
             )
 
     # The model kept asking for tools and never settled. Stop rather than spend the
-    # shared key on a loop that is not converging. The default of 10 comes from a
-    # live run where a search-happy model used 6 rounds on stage 3 alone and was
+    # shared key on a loop that is not converging. The default of 8 (slide 37) is a
+    # deliberate cap; in one live run a search-happy model used 6 rounds on stage 3 alone and was
     # cut off mid-answer.
     last = next(
         (m.content for m in reversed(messages) if getattr(m, "content", None)),
@@ -149,5 +184,24 @@ def run_agent(
         last or f"Stopped after {max_rounds} rounds without a final answer.",
         model_calls,
         called,
-        stopped_early=True,
+        True,
+        trace,
+        total_tokens,
     )
+
+
+def run_stage(client, model: str, company: str, schemas: list[dict], registry: dict, runs: int = 1):
+    """Run one stage `runs` times, each from a clean start, and print answer and trace."""
+    results = []
+    for number in range(1, runs + 1):
+        if runs > 1:
+            print(f"--- Run {number} of {runs} ---")
+        result = run_agent(client, model, company, schemas, registry)
+        print(result.answer)
+        print("\nTool calls, in order:")
+        print(format_trace(result) or "(none)")
+        print(f"\n--- {result.model_calls} model calls, {result.total_tokens} tokens")
+        if result.stopped_early:
+            print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+        results.append(result)
+    return results

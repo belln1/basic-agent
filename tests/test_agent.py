@@ -116,3 +116,93 @@ def test_unreachable_base_url_gives_a_readable_message():
         run_agent(client, "m", "Alphabet", [], {})
     msg = str(excinfo.value)
     assert "BASE_URL" in msg and "192.168" in msg
+
+
+# --- the trace (slides 52-53: tool calls with arguments, in order, plus tokens) ---
+
+
+def test_trace_records_tool_name_arguments_and_order():
+    from cfa_agent.agent import format_trace
+
+    client = FakeClient(
+        [
+            tool_call("calculator", {"expression": "2+2"}),
+            tool_call("calculator", {"expression": "3*3"}),
+            content("Buy."),
+        ]
+    )
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert [(t["round"], t["tool"], t["arguments"]) for t in r.trace] == [
+        (1, "calculator", {"expression": "2+2"}),
+        (2, "calculator", {"expression": "3*3"}),
+    ]
+    assert r.trace[0]["result"] == "4"
+    assert format_trace(r).splitlines() == [
+        "1. calculator(expression='2+2')",
+        "2. calculator(expression='3*3')",
+    ]
+
+
+def test_trace_with_malformed_arguments_is_printed_not_raised():
+    from cfa_agent.agent import format_trace
+
+    client = FakeClient([content("x")])
+    r = run_agent(client, "m", "Roche", [], {})
+    r.trace.append({"round": 1, "tool": "calculator", "arguments": "{not json", "result": "Error"})
+    assert "calculator({not json)" in format_trace(r)
+
+
+def test_malformed_arguments_reach_the_trace_as_raw_text():
+    import types
+
+    from fake_client import _FakeFunction, _FakeMessage, _FakeResponse
+
+    bad = types.SimpleNamespace(
+        id="call_x", type="function", function=_FakeFunction("calculator", "{not json")
+    )
+    client = FakeClient([content("unused")])
+    client._responses = [("raw", None)]
+
+    def _next(**_):
+        if client._served == 0:
+            client._served += 1
+            return _FakeResponse(_FakeMessage(None, [bad]))
+        return _FakeResponse(_FakeMessage("done", None))
+
+    client._next = _next
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.trace[0]["arguments"] == "{not json"
+    assert r.trace[0]["result"].startswith("Error")
+
+
+def test_total_tokens_are_summed_over_every_model_call():
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"}, tokens=100), content("Hold.", tokens=40)])
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.total_tokens == 140
+
+
+def test_default_round_limit_is_eight():
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"})] * 20)
+    r = run_agent(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert r.stopped_early and r.model_calls == 8
+
+
+def test_run_stage_runs_independently_and_prints_each_trace(capsys):
+    from cfa_agent.agent import run_stage
+
+    client = FakeClient([content("Hold A.", tokens=10), content("Hold B.", tokens=20), content("Sell C.", tokens=30)])
+    results = run_stage(client, "m", "Roche", [], {}, runs=3)
+    out = capsys.readouterr().out
+    assert [r.answer for r in results] == ["Hold A.", "Hold B.", "Sell C."]
+    assert out.count("--- Run") == 3 and "3 runs" not in out
+    assert "1 model calls, 20 tokens" in out
+    # independent histories: each run started from system+user only
+    assert all(len(seen) == 2 for seen in client.messages_seen)
+
+
+def test_run_stage_flags_a_capped_run(capsys):
+    from cfa_agent.agent import run_stage
+
+    client = FakeClient([tool_call("calculator", {"expression": "1+1"})] * 20)
+    run_stage(client, "m", "Roche", TOOL_SCHEMAS, TOOL_REGISTRY)
+    assert "hit the round limit" in capsys.readouterr().out

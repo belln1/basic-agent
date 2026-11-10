@@ -66,7 +66,18 @@ T = _segments(
 )
 A = _segments(
     "agent.py",
-    ["SYSTEM_PROMPT", "_user_message", "ask_without_tools", "_base_url_of", "_create", "_invoke", "run_agent"],
+    [
+        "SYSTEM_PROMPT",
+        "_user_message",
+        "_base_url_of",
+        "_create",
+        "AgentResult",
+        "_arguments_of",
+        "_invoke",
+        "run_agent",
+        "format_trace",
+        "run_stage",
+    ],
 )
 C = _segments(
     "config.py",
@@ -221,14 +232,53 @@ TICKER = "ROG.SW"
 {A["_user_message"]}
 '''
     ),
-    # 6
+    # 5b
     code(
         f'''
-# Stage 1: the model alone. One call, no tools, no loop.
-{A["ask_without_tools"]}
+import json
+from dataclasses import dataclass, field
 
 
-print(ask_without_tools(client, MODEL, COMPANY))
+@dataclass
+{A["AgentResult"]}
+
+
+{A["_arguments_of"]}
+
+
+{A["_invoke"]}
+
+
+{A["run_agent"]}
+
+
+{A["format_trace"]}
+
+
+{A["run_stage"]}
+'''
+    ),
+    # 5c
+    md(
+        """
+## Reading the trace
+
+Every stage below prints the same three things after the answer:
+
+- **Tool calls, in order**: which function the model asked for, with which arguments.
+  `get_stock_data(ticker='ROG.SW')` is a different request from `get_stock_data(ticker='Roche')`.
+- **Model calls**: how many times the loop went round. Each one is a paid API call.
+- **Tokens**: the size of everything sent and received, added up over those calls.
+
+Judge the *trace*, not only the answer: a confident recommendation with no tool calls
+behind it is a recollection.
+"""
+    ),
+    # 6
+    code(
+        '''
+# Stage 1: the model alone. Same loop, empty tool list. Run three times: the answers differ.
+run_stage(client, MODEL, COMPANY, [], {}, runs=3)
 '''
     ),
     # 7
@@ -261,27 +311,6 @@ No amount of rewording the prompt fixes this. You cannot ask a model to know som
 was never told. It needs a way to go and look.
 """
     ),
-    # 8
-    code(
-        f'''
-import json
-from dataclasses import dataclass
-
-
-@dataclass
-class AgentResult:
-    answer: str
-    model_calls: int
-    tool_calls: list
-    stopped_early: bool
-
-
-{A["_invoke"]}
-
-
-{A["run_agent"]}
-'''
-    ),
     # 9
     code(
         f'''
@@ -310,11 +339,7 @@ import ast
 STAGE_2_SCHEMAS = [CALCULATOR_SCHEMA]
 STAGE_2_REGISTRY = {"calculator": calculator}
 
-result = run_agent(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_2_SCHEMAS, STAGE_2_REGISTRY)
 '''
     ),
     # 11
@@ -351,11 +376,7 @@ def load_cache():
 STAGE_3_SCHEMAS = [CALCULATOR_SCHEMA, WEB_SEARCH_SCHEMA]
 STAGE_3_REGISTRY = {"calculator": calculator, "web_search": web_search}
 
-result = run_agent(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_3_SCHEMAS, STAGE_3_REGISTRY)
 '''
     ),
     # 13
@@ -401,11 +422,7 @@ STAGE_4_REGISTRY = {
     "get_stock_data": get_stock_data,
 }
 
-result = run_agent(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, STAGE_4_SCHEMAS, STAGE_4_REGISTRY)
 
 # Pick one figure out of that answer and trace it back: which tool produced it,
 # and does it match what you find yourself?
@@ -487,11 +504,7 @@ MY_TOOL_SCHEMA = {
 MY_SCHEMAS = STAGE_4_SCHEMAS + [MY_TOOL_SCHEMA]
 MY_REGISTRY = {**STAGE_4_REGISTRY, "my_tool": my_tool}
 
-result = run_agent(client, MODEL, COMPANY, MY_SCHEMAS, MY_REGISTRY)
-print(result.answer)
-print(f"\\n--- {result.model_calls} model calls, tools used: {result.tool_calls}")
-if result.stopped_early:
-    print("--- NOTE: hit the round limit, so the answer above is incomplete.")
+run_stage(client, MODEL, COMPANY, MY_SCHEMAS, MY_REGISTRY)
 '''
     ),
 ]
